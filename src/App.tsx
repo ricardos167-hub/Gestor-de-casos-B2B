@@ -106,22 +106,16 @@ export default function App() {
         return;
       }
 
-      let workingFields = fetchedFields;
-
-      const hasSystemFields = fetchedFields.some((f) => f.isSystem);
-      if (!hasSystemFields) {
-        const systemFields = DEFAULT_FIELDS.filter((f) => f.isSystem);
-        workingFields = [...systemFields, ...fetchedFields];
-      }
-
-      // Backfill default fields introduced after this install was first seeded
-      // (e.g. "origen", "programa") so existing deployments pick them up automatically.
-      const missingDefaults = DEFAULT_FIELDS.filter(
-        (df) => !workingFields.some((f) => f.id === df.id)
+      // Only backfill missing SYSTEM fields (id, titulo, estado, prioridad, etc.) —
+      // those can't be deleted from the UI, so their absence only ever means this
+      // install predates them. Regular fields (departamento, sede, origen, programa...)
+      // must NOT be auto re-added, or admins could never permanently delete a field.
+      const missingSystemFields = DEFAULT_FIELDS.filter(
+        (df) => df.isSystem && !fetchedFields.some((f) => f.id === df.id)
       );
 
-      if (!hasSystemFields || missingDefaults.length > 0) {
-        const merged = [...workingFields, ...missingDefaults].map((item, idx) => ({ ...item, order: idx + 1 }));
+      if (missingSystemFields.length > 0) {
+        const merged = [...fetchedFields, ...missingSystemFields].map((item, idx) => ({ ...item, order: idx + 1 }));
         setCustomFields(merged);
         saveAllCustomFieldsToFirestore(merged);
       } else {
