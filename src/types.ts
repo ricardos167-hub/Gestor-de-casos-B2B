@@ -9,6 +9,7 @@ export interface CustomField {
   required?: boolean;
   showInTable?: boolean;
   isSystem?: boolean; // system fields cannot be deleted
+  hidden?: boolean; // hidden fields are skipped (and never required) in the case creation form
   order: number;
 }
 

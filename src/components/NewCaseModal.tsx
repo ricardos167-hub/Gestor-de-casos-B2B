@@ -86,9 +86,9 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
       newErrors.titulo = 'El título del caso es obligatorio.';
     }
 
-    // Validate required custom fields (only non-system fields)
+    // Validate required custom fields (only non-system, non-hidden fields)
     customFields
-      .filter((field) => !field.isSystem)
+      .filter((field) => !field.isSystem && !field.hidden)
       .forEach((field) => {
         if (field.required) {
           const val = customValues[field.id];
@@ -237,7 +237,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
           </div>
 
           {/* Section 2: Todos los campos del sistema y personalizados */}
-          {(customFields.filter((f) => !f.isSystem).length > 0 || (hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0)) && (
+          {(customFields.filter((f) => !f.isSystem && !f.hidden).length > 0 || (hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0)) && (
             <div className="pt-4 border-t border-slate-100">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Tag className="w-4 h-4 text-slate-700" />
@@ -255,7 +255,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                   type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
 
                   const fieldRows: Row[] = customFields
-                    .filter((f) => !f.isSystem)
+                    .filter((f) => !f.isSystem && !f.hidden)
                     .filter((f) => {
                       if (!hierarchyConfig?.levels) return true;
                       const isHierarchyLevel = hierarchyConfig.levels.some(

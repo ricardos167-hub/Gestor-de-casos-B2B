@@ -21,7 +21,8 @@ import {
   Upload,
   Layers,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  EyeOff
 } from 'lucide-react';
 import { CustomField, FieldType, HierarchyPresetConfig } from '../types';
 import { parseExcelToHierarchy, downloadHierarchyTemplateExcel } from '../utils/excelHierarchyParser';
@@ -56,12 +57,14 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
   const [newOptionsText, setNewOptionsText] = useState('Opción 1, Opción 2, Opción 3');
   const [newRequired, setNewRequired] = useState(false);
   const [newShowInTable, setNewShowInTable] = useState(true);
+  const [newHidden, setNewHidden] = useState(false);
 
   // Editing field state
   const [editLabel, setEditLabel] = useState('');
   const [editOptionsText, setEditOptionsText] = useState('');
   const [editRequired, setEditRequired] = useState(false);
   const [editShowInTable, setEditShowInTable] = useState(true);
+  const [editHidden, setEditHidden] = useState(false);
 
   // Excel Hierarchy Upload State
   const [excelUploadError, setExcelUploadError] = useState<string | null>(null);
@@ -126,9 +129,10 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
       label: newLabel.trim(),
       type: newType,
       options,
-      required: newRequired,
+      required: newHidden ? false : newRequired,
       showInTable: newShowInTable,
       isSystem: false,
+      hidden: newHidden,
       order: customFields.length + 1,
     };
 
@@ -140,6 +144,7 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
       setNewOptionsText('Opción 1, Opción 2, Opción 3');
       setNewRequired(false);
       setNewShowInTable(true);
+      setNewHidden(false);
       setIsAdding(false);
     } catch (err: any) {
       setCreateFieldError(err?.message || 'No se pudo crear el campo. Intenta de nuevo.');
@@ -152,6 +157,7 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
     setEditOptionsText(field.options ? field.options.join(', ') : '');
     setEditRequired(Boolean(field.required));
     setEditShowInTable(field.showInTable !== false);
+    setEditHidden(Boolean(field.hidden));
   };
 
   const handleSaveFieldEdit = (field: CustomField) => {
@@ -163,8 +169,9 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
       ...field,
       label: editLabel.trim() || field.label,
       options,
-      required: editRequired,
+      required: editHidden ? false : editRequired,
       showInTable: editShowInTable,
+      hidden: editHidden,
     };
 
     onUpdateField(updated);
@@ -468,7 +475,23 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                   />
                   <span className="text-xs font-medium text-slate-700">Mostrar como columna en la Tabla Excel</span>
                 </label>
+
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newHidden}
+                    onChange={(e) => setNewHidden(e.target.checked)}
+                    className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300"
+                  />
+                  <span className="text-xs font-medium text-slate-700">Ocultar del formulario de creación</span>
+                </label>
               </div>
+
+              {newHidden && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Este campo no aparecerá al crear un caso nuevo y dejará de ser obligatorio automáticamente.
+                </p>
+              )}
 
             </div>
 
@@ -625,9 +648,14 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                             Requerido
                           </span>
                         )}
-                        {field.showInTable && (
+                        {field.showInTable && !field.hidden && (
                           <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
                             <Eye className="w-3 h-3" /> Visible en Tabla
+                          </span>
+                        )}
+                        {field.hidden && (
+                          <span className="text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-300/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <EyeOff className="w-3 h-3" /> Oculto (formulario, tabla y caso)
                           </span>
                         )}
                       </div>
@@ -702,7 +730,23 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                           />
                           <span>Mostrar Columna en Tabla Excel</span>
                         </label>
+
+                        <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editHidden}
+                            onChange={(e) => setEditHidden(e.target.checked)}
+                            className="rounded text-slate-900 focus:ring-slate-900"
+                          />
+                          <span>Ocultar del formulario de creación</span>
+                        </label>
                       </div>
+
+                      {editHidden && (
+                        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          Este campo no aparecerá al crear un caso nuevo y dejará de ser obligatorio automáticamente.
+                        </p>
+                      )}
                     </div>
                   )}
 

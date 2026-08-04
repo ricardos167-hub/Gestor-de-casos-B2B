@@ -335,7 +335,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                     type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
 
                     const rows: Row[] = [
-                      ...customFields.filter((f) => !f.isSystem).map((field): Row => ({ kind: 'field', field })),
+                      ...customFields.filter((f) => !f.isSystem && !f.hidden).map((field): Row => ({ kind: 'field', field })),
                       ...(hasHierarchy ? [{ kind: 'hierarchy' as const }] : []),
                     ].sort((a, b) => {
                       const orderA = a.kind === 'field' ? a.field.order : hierarchyOrder;

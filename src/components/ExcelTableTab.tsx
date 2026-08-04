@@ -145,8 +145,9 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
   };
 
   // All available columns (derived directly from customFields so system + custom labels/order are unified)
+  // Hidden fields are excluded entirely from the table, regardless of showInTable/visibleColumnIds.
   const allColumns = useMemo(() => {
-    return customFields;
+    return customFields.filter((f) => !f.hidden);
   }, [customFields]);
 
   // Handle Sort Toggle
