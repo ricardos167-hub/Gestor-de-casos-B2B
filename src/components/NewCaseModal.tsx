@@ -196,7 +196,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                   className={`w-full px-3 py-2 rounded-lg border text-xs outline-none transition-all ${
                     errors.titulo
                       ? 'border-rose-400 bg-rose-50/50 focus:ring-1 focus:ring-rose-200'
-                      : 'border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900'
+                      : `border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 ${titulo.trim() ? 'bg-white' : 'bg-slate-100'}`
                   }`}
                 />
                 {errors.titulo && (
@@ -223,7 +223,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                 <select
                   value={estado}
                   onChange={(e) => setEstado(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none bg-white"
+                  className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${estado ? 'bg-white' : 'bg-slate-100'}`}
                 >
                   {estadoOptions.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
@@ -237,7 +237,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                 <select
                   value={prioridad}
                   onChange={(e) => setPrioridad(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none bg-white"
+                  className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${prioridad ? 'bg-white' : 'bg-slate-100'}`}
                 >
                   {prioridadOptions.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
@@ -345,7 +345,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                           type="text"
                           value={val || ''}
                           onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none"
+                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-slate-100'}`}
                         />
                       )}
 
@@ -355,7 +355,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                           rows={3}
                           value={val || ''}
                           onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none resize-none"
+                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none resize-none ${val ? 'bg-white' : 'bg-slate-100'}`}
                         />
                       )}
 
@@ -367,7 +367,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                           onChange={(e) =>
                             handleCustomValueChange(field.id, e.target.value === '' ? '' : Number(e.target.value))
                           }
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none"
+                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val !== undefined && val !== '' ? 'bg-white' : 'bg-slate-100'}`}
                         />
                       )}
 
@@ -376,7 +376,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                         <select
                           value={val || ''}
                           onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none bg-white"
+                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-slate-100'}`}
                         >
                           <option value="">-- Seleccionar --</option>
                           {field.options?.map((opt) => (
@@ -393,7 +393,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                           type="date"
                           value={val || ''}
                           onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none"
+                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-slate-100'}`}
                         />
                       )}
 
@@ -403,7 +403,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                           type="email"
                           value={val || ''}
                           onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none"
+                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-slate-100'}`}
                         />
                       )}
 
