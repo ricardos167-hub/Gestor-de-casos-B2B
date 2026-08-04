@@ -6,21 +6,24 @@ import { FieldsConfigTab } from './components/FieldsConfigTab';
 import { AnalyticsTab } from './components/AnalyticsTab';
 import { NewCaseModal } from './components/NewCaseModal';
 import { CaseModal } from './components/CaseModal';
-import { DEFAULT_FIELDS } from './data/initialData';
-import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig } from './types';
-import { 
-  subscribeToCases, 
-  subscribeToCustomFields, 
+import { Toast } from './components/Toast';
+import { DEFAULT_FIELDS, DEFAULT_FIELD_AREAS } from './data/initialData';
+import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig, FieldArea } from './types';
+import {
+  subscribeToCases,
+  subscribeToCustomFields,
   subscribeToAppSettings,
   subscribeToHierarchyPresets,
-  saveCaseToFirestore, 
-  deleteCaseFromFirestore, 
-  deleteMultipleCasesFromFirestore, 
-  saveCustomFieldToFirestore, 
-  saveAllCustomFieldsToFirestore, 
+  subscribeToFieldAreas,
+  saveCaseToFirestore,
+  deleteCaseFromFirestore,
+  deleteMultipleCasesFromFirestore,
+  saveCustomFieldToFirestore,
+  saveAllCustomFieldsToFirestore,
   deleteCustomFieldFromFirestore,
   saveAppSettingsToFirestore,
-  saveHierarchyPresetsToFirestore
+  saveHierarchyPresetsToFirestore,
+  saveFieldAreasToFirestore
 } from './lib/firebase';
 
 interface UserProfile {
@@ -72,6 +75,12 @@ export default function App() {
 
   // Hierarchy Buttons Presets State (Loaded from Excel)
   const [hierarchyConfig, setHierarchyConfig] = useState<HierarchyPresetConfig | null>(null);
+
+  // Field Areas: editable section headings that group custom fields on the forms
+  const [fieldAreas, setFieldAreas] = useState<FieldArea[]>(DEFAULT_FIELD_AREAS);
+
+  // Passive success notification (e.g. "Caso creado con éxito")
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Active Tab: 'table' | 'fields' | 'analytics'
   const [activeTab, setActiveTab] = useState<'table' | 'fields' | 'analytics'>('table');
@@ -147,11 +156,21 @@ export default function App() {
       setHierarchyConfig(fetchedHierarchy);
     });
 
+    const unsubscribeFieldAreas = subscribeToFieldAreas((fetchedAreas) => {
+      if (fetchedAreas.length === 0) {
+        setFieldAreas(DEFAULT_FIELD_AREAS);
+        saveFieldAreasToFirestore(DEFAULT_FIELD_AREAS);
+      } else {
+        setFieldAreas(fetchedAreas);
+      }
+    });
+
     return () => {
       unsubscribeCases();
       unsubscribeFields();
       unsubscribeSettings();
       unsubscribeHierarchy();
+      unsubscribeFieldAreas();
     };
   }, []);
 
@@ -206,6 +225,7 @@ export default function App() {
         storeProfile(currentUserEmail, updatedProfile);
       }
     }
+    setToastMessage(`Caso ${newCase.id} creado con éxito`);
     await saveCaseToFirestore(newCase);
   };
 
@@ -266,6 +286,11 @@ export default function App() {
     saveHierarchyPresetsToFirestore(newConfig);
   };
 
+  const handleSaveFieldAreas = async (newAreas: FieldArea[]) => {
+    setFieldAreas(newAreas);
+    await saveFieldAreasToFirestore(newAreas);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased selection:bg-slate-200">
       
@@ -319,6 +344,8 @@ export default function App() {
             onReorderFields={handleReorderFields}
             hierarchyConfig={hierarchyConfig}
             onSaveHierarchyConfig={handleSaveHierarchyConfig}
+            fieldAreas={fieldAreas}
+            onSaveFieldAreas={handleSaveFieldAreas}
           />
         )}
 
@@ -341,6 +368,7 @@ export default function App() {
         currentUserEmail={currentUserEmail || 'invitado@empresa.com'}
         hierarchyConfig={hierarchyConfig}
         userProfile={currentUserProfile}
+        fieldAreas={fieldAreas}
       />
 
       <CaseModal
@@ -353,7 +381,12 @@ export default function App() {
         customFields={customFields}
         currentUserEmail={currentUserEmail || 'invitado@empresa.com'}
         hierarchyConfig={hierarchyConfig}
+        fieldAreas={fieldAreas}
       />
+
+      {toastMessage && (
+        <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      )}
 
     </div>
   );

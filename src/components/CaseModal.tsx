@@ -14,9 +14,10 @@ import {
   Building2, 
   Edit3
 } from 'lucide-react';
-import { CaseRecord, CustomField, CaseComment, HierarchyPresetConfig } from '../types';
+import { CaseRecord, CustomField, CaseComment, HierarchyPresetConfig, FieldArea } from '../types';
 import { HierarchyButtonSelector } from './HierarchyButtonSelector';
 import { confirmTripleDelete } from '../utils/confirmDelete';
+import { GENERAL_AREA_ID } from '../data/initialData';
 
 interface CaseModalProps {
   caseRecord: CaseRecord | null;
@@ -27,6 +28,7 @@ interface CaseModalProps {
   customFields: CustomField[];
   currentUserEmail: string;
   hierarchyConfig?: HierarchyPresetConfig | null;
+  fieldAreas: FieldArea[];
 }
 
 export const CaseModal: React.FC<CaseModalProps> = ({
@@ -38,6 +40,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
   customFields,
   currentUserEmail,
   hierarchyConfig,
+  fieldAreas,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'history'>('details');
@@ -56,25 +59,51 @@ export const CaseModal: React.FC<CaseModalProps> = ({
     ? prioridadField.options
     : ['Baja', 'Media', 'Alta', 'Crítica'];
 
+  const sortedAreas = [...fieldAreas].sort((a, b) => a.order - b.order);
+  const defaultAreaId = sortedAreas[0]?.id || GENERAL_AREA_ID;
+
   // Editable Form State
   const [titulo, setTitulo] = useState(caseRecord?.titulo ?? '');
   const [estado, setEstado] = useState(caseRecord?.estado ?? '');
   const [prioridad, setPrioridad] = useState(caseRecord?.prioridad ?? '');
   const [customValues, setCustomValues] = useState<Record<string, any>>({ ...caseRecord?.customValues });
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   // Comment input
   const [newComment, setNewComment] = useState('');
 
   if (!isOpen || !caseRecord) return null;
 
+  // While editing and the selected (not-yet-saved) Estado is "Cerrado", fields
+  // marked "requiredToClose" must be filled — they were allowed to stay empty
+  // up to now, but the case can't move to Cerrado until they're completed.
+  const isClosing = isEditing && estado.trim().toLowerCase() === 'cerrado';
+  const isEmptyValue = (val: any) => val === undefined || val === null || val === '' || (typeof val === 'string' && val.trim() === '');
+  const tituloBlocksClose = isClosing && tituloField?.requiredToClose && isEmptyValue(titulo);
+
   const handleCustomChange = (fieldId: string, value: any) => {
     setCustomValues((prev) => ({
       ...prev,
       [fieldId]: value,
     }));
+    if (closeError) setCloseError(null);
   };
 
   const handleSaveEdits = () => {
+    if (isClosing) {
+      const missingLabels: string[] = [];
+      if (tituloBlocksClose) missingLabels.push(tituloField?.label || 'Título');
+      customFields
+        .filter((f) => !f.isSystem && f.requiredToClose && isEmptyValue(customValues[f.id]))
+        .forEach((f) => missingLabels.push(f.label));
+
+      if (missingLabels.length > 0) {
+        setCloseError(`Completa estos campos obligatorios antes de cerrar el caso: ${missingLabels.join(', ')}.`);
+        return;
+      }
+    }
+    setCloseError(null);
+
     const now = new Date().toISOString();
     const updatedHistory = [
       ...(caseRecord.historial || []),
@@ -212,6 +241,12 @@ export const CaseModal: React.FC<CaseModalProps> = ({
           </div>
         </div>
 
+        {closeError && (
+          <div className="bg-rose-50 border-b border-rose-200 px-6 py-2 text-rose-700 text-xs font-medium">
+            {closeError}
+          </div>
+        )}
+
         {/* Status Bar */}
         <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
           <div className="flex items-center gap-3">
@@ -223,7 +258,10 @@ export const CaseModal: React.FC<CaseModalProps> = ({
             ) : (
               <select
                 value={estado}
-                onChange={(e) => setEstado(e.target.value)}
+                onChange={(e) => {
+                  setEstado(e.target.value);
+                  if (closeError) setCloseError(null);
+                }}
                 className="px-2 py-1 rounded-md border border-slate-200 text-xs font-medium bg-white outline-none"
               >
                 {estadoOptions.map((opt) => (
@@ -305,7 +343,12 @@ export const CaseModal: React.FC<CaseModalProps> = ({
               {/* System Main Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">{tituloField?.label || 'Título del Caso'}</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {tituloField?.label || 'Título del Caso'}
+                    {tituloBlocksClose && (
+                      <span className="text-rose-600 text-[10px] font-bold ml-1.5">● Obligatorio para cerrar</span>
+                    )}
+                  </label>
                   {!isEditing ? (
                     <div className="text-xs font-semibold text-slate-900 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
                       {caseRecord.titulo}
@@ -314,8 +357,15 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                     <input
                       type="text"
                       value={titulo}
-                      onChange={(e) => setTitulo(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 bg-white"
+                      onChange={(e) => {
+                        setTitulo(e.target.value);
+                        if (closeError) setCloseError(null);
+                      }}
+                      className={`w-full px-3 py-2 rounded-lg border text-xs font-semibold outline-none focus:ring-1 ${
+                        tituloBlocksClose
+                          ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-200'
+                          : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900 bg-white'
+                      }`}
                     />
                   )}
                 </div>
@@ -328,159 +378,175 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                 </div>
               </div>
 
-              {/* Custom Dynamic Fields Display / Editing */}
-              <div className="pt-4 border-t border-slate-100">
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
-                  Valores de Campos Personalizados
-                </h4>
+              {/* Custom Dynamic Fields Display / Editing, agrupados por Área */}
+              {(() => {
+                const hasHierarchy = Boolean(
+                  isEditing && hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0
+                );
+                const hierarchyAreaId = hierarchyConfig?.areaId || defaultAreaId;
+                // Default the hierarchy block before other fields until an admin
+                // explicitly repositions it via the Fields Config drag-and-drop.
+                const hierarchyOrder = hierarchyConfig?.order ?? -1;
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(() => {
-                    const hasHierarchy = Boolean(
-                      isEditing && hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0
-                    );
-                    // Default the hierarchy block before other fields until an admin
-                    // explicitly repositions it via the Fields Config drag-and-drop.
-                    const hierarchyOrder = hierarchyConfig?.order ?? -1;
+                type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
 
-                    type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
+                const renderHierarchyRow = () => (
+                  <div key="__hierarchy__" className="md:col-span-2">
+                    <HierarchyButtonSelector
+                      config={hierarchyConfig!}
+                      variant="clean"
+                      onSelectFinalPreset={(selectedPath, titleSuggestion) => {
+                        setTitulo(titleSuggestion);
+                        if (hierarchyConfig!.levels && hierarchyConfig!.levels.length > 0) {
+                          const newCustomVals = { ...customValues };
+                          hierarchyConfig!.levels.forEach((lvlName, idx) => {
+                            if (selectedPath[idx]) {
+                              const matchedField = customFields.find(
+                                f => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
+                              );
+                              if (matchedField) {
+                                newCustomVals[matchedField.id] = selectedPath[idx];
+                              }
+                            }
+                          });
+                          setCustomValues(newCustomVals);
+                        }
+                      }}
+                      compact
+                    />
+                  </div>
+                );
+
+                const renderFieldRow = (field: CustomField) => {
+                  const value = isEditing ? customValues[field.id] : (caseRecord.customValues ? caseRecord.customValues[field.id] : '');
+                  const blocksClose = isClosing && field.requiredToClose && isEmptyValue(value);
+
+                  return (
+                    <div
+                      key={field.id}
+                      className={field.type === 'textarea' ? 'md:col-span-2' : ''}
+                    >
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">
+                        {field.label}
+                        {blocksClose && (
+                          <span className="text-rose-600 text-[10px] font-bold ml-1.5">● Obligatorio para cerrar</span>
+                        )}
+                      </label>
+
+                      {!isEditing ? (
+                        <div className="text-xs text-slate-800 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80 min-h-[38px] flex items-center">
+                          {field.type === 'checkbox' ? (
+                            <span className={`inline-flex items-center gap-1 font-medium ${value ? 'text-emerald-700' : 'text-slate-400'}`}>
+                              {value ? '✓ Sí / Activado' : '✗ No / Desactivado'}
+                            </span>
+                          ) : field.type === 'textarea' ? (
+                            <p className="whitespace-pre-wrap">{value || <span className="text-slate-400 italic">Sin información</span>}</p>
+                          ) : (
+                            <span>{value !== undefined && value !== '' ? String(value) : <span className="text-slate-400 italic">Sin información</span>}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          {field.type === 'text' && (
+                            <input
+                              type="text"
+                              value={value || ''}
+                              onChange={(e) => handleCustomChange(field.id, e.target.value)}
+                              className={`w-full px-3 py-2 rounded-lg border text-xs outline-none focus:ring-1 ${blocksClose ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-200' : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900'}`}
+                            />
+                          )}
+
+                          {field.type === 'textarea' && (
+                            <textarea
+                              rows={3}
+                              value={value || ''}
+                              onChange={(e) => handleCustomChange(field.id, e.target.value)}
+                              className={`w-full px-3 py-2 rounded-lg border text-xs outline-none focus:ring-1 resize-none ${blocksClose ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-200' : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900'}`}
+                            />
+                          )}
+
+                          {field.type === 'number' && (
+                            <input
+                              type="number"
+                              value={value !== undefined ? value : ''}
+                              onChange={(e) => handleCustomChange(field.id, e.target.value === '' ? '' : Number(e.target.value))}
+                              onWheel={(e) => e.currentTarget.blur()}
+                              className={`w-full px-3 py-2 rounded-lg border text-xs outline-none focus:ring-1 ${blocksClose ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-200' : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900'}`}
+                            />
+                          )}
+
+                          {field.type === 'select' && (
+                            <select
+                              value={value || ''}
+                              onChange={(e) => handleCustomChange(field.id, e.target.value)}
+                              className={`w-full px-3 py-2 rounded-lg border text-xs outline-none focus:ring-1 bg-white ${blocksClose ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-200' : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900'}`}
+                            >
+                              <option value="">-- Seleccionar --</option>
+                              {field.options?.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+
+                          {field.type === 'date' && (
+                            <input
+                              type="date"
+                              value={value || ''}
+                              onChange={(e) => handleCustomChange(field.id, e.target.value)}
+                              className={`w-full px-3 py-2 rounded-lg border text-xs outline-none focus:ring-1 ${blocksClose ? 'border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-200' : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900'}`}
+                            />
+                          )}
+
+                          {field.type === 'checkbox' && (
+                            <label className="inline-flex items-center gap-2 mt-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(value)}
+                                onChange={(e) => handleCustomChange(field.id, e.target.checked)}
+                                className="w-4 h-4 rounded text-slate-900 border-slate-300"
+                              />
+                              <span className="text-xs text-slate-700">Activado</span>
+                            </label>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                const areaGroups = sortedAreas
+                  .map((area) => {
+                    const fieldRows: Row[] = customFields
+                      .filter((f) => !f.isSystem && !f.hidden)
+                      .filter((f) => (f.areaId || defaultAreaId) === area.id)
+                      .map((field) => ({ kind: 'field' as const, field }));
 
                     const rows: Row[] = [
-                      ...customFields.filter((f) => !f.isSystem && !f.hidden).map((field): Row => ({ kind: 'field', field })),
-                      ...(hasHierarchy ? [{ kind: 'hierarchy' as const }] : []),
+                      ...fieldRows,
+                      ...(hasHierarchy && hierarchyAreaId === area.id ? [{ kind: 'hierarchy' as const }] : []),
                     ].sort((a, b) => {
                       const orderA = a.kind === 'field' ? a.field.order : hierarchyOrder;
                       const orderB = b.kind === 'field' ? b.field.order : hierarchyOrder;
                       return orderA - orderB;
                     });
 
-                    return rows.map((row) => {
-                      if (row.kind === 'hierarchy') {
-                        return (
-                          <div key="__hierarchy__" className="md:col-span-2">
-                            <HierarchyButtonSelector
-                              config={hierarchyConfig!}
-                              variant="clean"
-                              onSelectFinalPreset={(selectedPath, titleSuggestion) => {
-                                setTitulo(titleSuggestion);
-                                if (hierarchyConfig!.levels && hierarchyConfig!.levels.length > 0) {
-                                  const newCustomVals = { ...customValues };
-                                  hierarchyConfig!.levels.forEach((lvlName, idx) => {
-                                    if (selectedPath[idx]) {
-                                      const matchedField = customFields.find(
-                                        f => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
-                                      );
-                                      if (matchedField) {
-                                        newCustomVals[matchedField.id] = selectedPath[idx];
-                                      }
-                                    }
-                                  });
-                                  setCustomValues(newCustomVals);
-                                }
-                              }}
-                              compact
-                            />
-                          </div>
-                        );
-                      }
+                    return { area, rows };
+                  })
+                  .filter(({ rows }) => rows.length > 0);
 
-                    const field = row.field;
-                    const value = isEditing ? customValues[field.id] : (caseRecord.customValues ? caseRecord.customValues[field.id] : '');
-
-                    return (
-                      <div
-                        key={field.id}
-                        className={field.type === 'textarea' ? 'md:col-span-2' : ''}
-                      >
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">
-                          {field.label}
-                        </label>
-
-                        {!isEditing ? (
-                          <div className="text-xs text-slate-800 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80 min-h-[38px] flex items-center">
-                            {field.type === 'checkbox' ? (
-                              <span className={`inline-flex items-center gap-1 font-medium ${value ? 'text-emerald-700' : 'text-slate-400'}`}>
-                                {value ? '✓ Sí / Activado' : '✗ No / Desactivado'}
-                              </span>
-                            ) : field.type === 'textarea' ? (
-                              <p className="whitespace-pre-wrap">{value || <span className="text-slate-400 italic">Sin información</span>}</p>
-                            ) : (
-                              <span>{value !== undefined && value !== '' ? String(value) : <span className="text-slate-400 italic">Sin información</span>}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div>
-                            {field.type === 'text' && (
-                              <input
-                                type="text"
-                                value={value || ''}
-                                onChange={(e) => handleCustomChange(field.id, e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
-                              />
-                            )}
-
-                            {field.type === 'textarea' && (
-                              <textarea
-                                rows={3}
-                                value={value || ''}
-                                onChange={(e) => handleCustomChange(field.id, e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 resize-none"
-                              />
-                            )}
-
-                            {field.type === 'number' && (
-                              <input
-                                type="number"
-                                value={value !== undefined ? value : ''}
-                                onChange={(e) => handleCustomChange(field.id, e.target.value === '' ? '' : Number(e.target.value))}
-                                onWheel={(e) => e.currentTarget.blur()}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
-                              />
-                            )}
-
-                            {field.type === 'select' && (
-                              <select
-                                value={value || ''}
-                                onChange={(e) => handleCustomChange(field.id, e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 bg-white"
-                              >
-                                <option value="">-- Seleccionar --</option>
-                                {field.options?.map((opt) => (
-                                  <option key={opt} value={opt}>
-                                    {opt}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-
-                            {field.type === 'date' && (
-                              <input
-                                type="date"
-                                value={value || ''}
-                                onChange={(e) => handleCustomChange(field.id, e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
-                              />
-                            )}
-
-                            {field.type === 'checkbox' && (
-                              <label className="inline-flex items-center gap-2 mt-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(value)}
-                                  onChange={(e) => handleCustomChange(field.id, e.target.checked)}
-                                  className="w-4 h-4 rounded text-slate-900 border-slate-300"
-                                />
-                                <span className="text-xs text-slate-700">Activado</span>
-                              </label>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                    });
-                  })()}
-                </div>
-              </div>
+                return areaGroups.map(({ area, rows }) => (
+                  <div key={area.id} className="pt-4 border-t border-slate-100">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
+                      {area.label}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {rows.map((row) => (row.kind === 'hierarchy' ? renderHierarchyRow() : renderFieldRow(row.field)))}
+                    </div>
+                  </div>
+                ));
+              })()}
 
             </div>
           )}

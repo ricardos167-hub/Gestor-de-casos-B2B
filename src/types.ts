@@ -10,6 +10,14 @@ export interface CustomField {
   showInTable?: boolean;
   isSystem?: boolean; // system fields cannot be deleted
   hidden?: boolean; // hidden fields are skipped (and never required) in the case creation form
+  requiredToClose?: boolean; // can be left empty while open, but blocks moving the case to "Cerrado" if empty
+  areaId?: string; // which FieldArea section this field renders under (defaults to the first/general area)
+  order: number;
+}
+
+export interface FieldArea {
+  id: string;
+  label: string;
   order: number;
 }
 
@@ -73,4 +81,5 @@ export interface HierarchyPresetConfig {
   tree: HierarchyNode[];
   updatedAt?: string;
   order?: number; // Position of the hierarchy button block among the other custom fields
+  areaId?: string; // which FieldArea section the hierarchy block renders under
 }

@@ -65,6 +65,12 @@ service cloud.firestore {
         && request.resource.data.lastNumber is number;
     }
 
+    match /appSettings/fieldAreas {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['areas'])
+        && request.resource.data.areas is list;
+    }
+
     // Deny anything outside the known collections/documents above.
     match /{document=**} {
       allow read, write: if false;

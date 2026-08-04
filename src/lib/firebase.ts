@@ -13,7 +13,7 @@ import {
   persistentMultipleTabManager
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig } from '../types';
+import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig, FieldArea } from '../types';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
@@ -154,6 +154,25 @@ export function subscribeToAppSettings(callback: (settings: AppSettings) => void
 export async function saveAppSettingsToFirestore(settings: AppSettings) {
   const docRef = doc(db, 'appSettings', 'headerConfig');
   await setDoc(docRef, settings, { merge: true });
+}
+
+// Field Areas (editable section headings that group custom fields on the forms)
+export function subscribeToFieldAreas(callback: (areas: FieldArea[]) => void) {
+  const docRef = doc(db, 'appSettings', 'fieldAreas');
+  return onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists() && Array.isArray(docSnap.data().areas)) {
+      callback(docSnap.data().areas as FieldArea[]);
+    } else {
+      callback([]);
+    }
+  }, (error) => {
+    console.error('Error listening to fieldAreas:', error);
+  });
+}
+
+export async function saveFieldAreasToFirestore(areas: FieldArea[]) {
+  const docRef = doc(db, 'appSettings', 'fieldAreas');
+  await setDoc(docRef, { areas });
 }
 
 // Hierarchy Preset Config (Buttons generated from Excel)

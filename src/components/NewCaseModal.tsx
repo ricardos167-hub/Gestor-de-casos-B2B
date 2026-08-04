@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, AlertCircle, FileText, Check, Tag, Sparkles } from 'lucide-react';
-import { CaseRecord, CustomField, HierarchyPresetConfig } from '../types';
+import { CaseRecord, CustomField, HierarchyPresetConfig, FieldArea } from '../types';
+import { GENERAL_AREA_ID } from '../data/initialData';
 import { HierarchyButtonSelector } from './HierarchyButtonSelector';
 import { getNextCaseId } from '../lib/firebase';
 
@@ -12,6 +13,7 @@ interface NewCaseModalProps {
   currentUserEmail: string;
   hierarchyConfig?: HierarchyPresetConfig | null;
   userProfile?: { origen: string; programa: string } | null;
+  fieldAreas: FieldArea[];
 }
 
 export const NewCaseModal: React.FC<NewCaseModalProps> = ({
@@ -22,6 +24,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
   currentUserEmail,
   hierarchyConfig,
   userProfile,
+  fieldAreas,
 }) => {
   // Base system fields are configurable (label, options) from Configurar Campos,
   // so their live label/options are read from customFields instead of being hardcoded.
@@ -35,6 +38,9 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
   const prioridadOptions = prioridadField?.options && prioridadField.options.length > 0
     ? prioridadField.options
     : ['Baja', 'Media', 'Alta', 'Crítica'];
+
+  const sortedAreas = [...fieldAreas].sort((a, b) => a.order - b.order);
+  const defaultAreaId = sortedAreas[0]?.id || GENERAL_AREA_ID;
 
   const buildInitialCustomValues = () => {
     const initial: Record<string, any> = {};
@@ -128,15 +134,20 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
       newErrors.titulo = 'El título del caso es obligatorio.';
     }
 
-    // Validate required custom fields (only non-system, non-hidden fields)
+    const isClosing = estado.trim().toLowerCase() === 'cerrado';
+
+    // Validate required custom fields (only non-system, non-hidden fields).
+    // Fields marked "requiredToClose" are only enforced when the initial
+    // status is already "Cerrado" — otherwise they're allowed to stay empty.
     customFields
       .filter((field) => !field.isSystem && !field.hidden)
       .forEach((field) => {
-        if (field.required) {
-          const val = customValues[field.id];
-          if (val === undefined || val === null || val === '' || (typeof val === 'string' && val.trim() === '')) {
-            newErrors[field.id] = `El campo "${field.label}" es obligatorio.`;
-          }
+        const val = customValues[field.id];
+        const isEmpty = val === undefined || val === null || val === '' || (typeof val === 'string' && val.trim() === '');
+        if (field.required && isEmpty) {
+          newErrors[field.id] = `El campo "${field.label}" es obligatorio.`;
+        } else if (isClosing && field.requiredToClose && isEmpty) {
+          newErrors[field.id] = `El campo "${field.label}" es obligatorio para cerrar el caso.`;
         }
       });
 
@@ -291,192 +302,201 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Todos los campos del sistema y personalizados */}
-          {(customFields.filter((f) => !f.isSystem && !f.hidden).length > 0 || (hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0)) && (
-            <div className="pt-4 border-t border-slate-100">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Tag className="w-4 h-4 text-slate-700" />
-                Todos los Campos del Sistema y Personalizados
-              </h4>
+          {/* Section 2: Campos personalizados, agrupados por Área */}
+          {(() => {
+            const hasHierarchy = Boolean(hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0);
+            const hierarchyAreaId = hierarchyConfig?.areaId || defaultAreaId;
+            // Default the hierarchy block before other fields until an admin
+            // explicitly repositions it via the Fields Config drag-and-drop.
+            const hierarchyOrder = hierarchyConfig?.order ?? -1;
+            const hierarchyLevelLabels = new Set((hierarchyConfig?.levels || []).map((l) => l.toLowerCase().trim()));
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Other Custom Fields + Hierarchy block, interleaved by position */}
-                {(() => {
-                  const hasHierarchy = Boolean(hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0);
-                  // Default the hierarchy block before other fields until an admin
-                  // explicitly repositions it via the Fields Config drag-and-drop.
-                  const hierarchyOrder = hierarchyConfig?.order ?? -1;
+            type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
 
-                  type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
-
-                  const fieldRows: Row[] = customFields
-                    .filter((f) => !f.isSystem && !f.hidden)
-                    .filter((f) => {
-                      if (!hierarchyConfig?.levels) return true;
-                      const isHierarchyLevel = hierarchyConfig.levels.some(
-                        (lvl) => lvl.toLowerCase().trim() === f.label.toLowerCase().trim()
-                      );
-                      return !isHierarchyLevel;
-                    })
-                    .map((field) => ({ kind: 'field', field }));
-
-                  const rows: Row[] = [
-                    ...fieldRows,
-                    ...(hasHierarchy ? [{ kind: 'hierarchy' as const }] : []),
-                  ].sort((a, b) => {
-                    const orderA = a.kind === 'field' ? a.field.order : hierarchyOrder;
-                    const orderB = b.kind === 'field' ? b.field.order : hierarchyOrder;
-                    return orderA - orderB;
-                  });
-
-                  return rows.map((row) => {
-                    if (row.kind === 'hierarchy') {
-                      return (
-                        <div key="__hierarchy__" className="md:col-span-2">
-                          <HierarchyButtonSelector
-                            config={hierarchyConfig!}
-                            variant="clean"
-                            onSelectFinalPreset={(selectedPath, titleSuggestion) => {
-                              if (!titulo) {
-                                setTitulo(titleSuggestion);
-                              }
-                              if (errors.titulo) {
-                                setErrors((prev) => {
-                                  const next = { ...prev };
-                                  delete next.titulo;
-                                  return next;
-                                });
-                              }
-
-                              // Auto-fill matching custom fields
-                              if (hierarchyConfig!.levels && hierarchyConfig!.levels.length > 0) {
-                                const newCustomVals = { ...customValues };
-                                hierarchyConfig!.levels.forEach((lvlName, idx) => {
-                                  if (selectedPath[idx]) {
-                                    const matchedField = customFields.find(
-                                      (f) => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
-                                    );
-                                    if (matchedField) {
-                                      newCustomVals[matchedField.id] = selectedPath[idx];
-                                    }
-                                  }
-                                });
-                                setCustomValues(newCustomVals);
-                              }
-                            }}
-                          />
-                        </div>
-                      );
+            const renderHierarchyRow = () => (
+              <div key="__hierarchy__" className="md:col-span-2">
+                <HierarchyButtonSelector
+                  config={hierarchyConfig!}
+                  variant="clean"
+                  onSelectFinalPreset={(selectedPath, titleSuggestion) => {
+                    if (!titulo) {
+                      setTitulo(titleSuggestion);
+                    }
+                    if (errors.titulo) {
+                      setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.titulo;
+                        return next;
+                      });
                     }
 
-                    const field = row.field;
-                    const val = customValues[field.id];
-                    const fieldError = errors[field.id];
-
-                    return (
-                      <div
-                        key={field.id}
-                        className={field.type === 'textarea' ? 'md:col-span-2' : ''}
-                      >
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        {field.label} {field.required && <span className="text-rose-600">*</span>}
-                      </label>
-
-                      {/* Text input */}
-                      {field.type === 'text' && (
-                        <input
-                          type="text"
-                          value={val || ''}
-                          onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
-                        />
-                      )}
-
-                      {/* Textarea */}
-                      {field.type === 'textarea' && (
-                        <textarea
-                          rows={3}
-                          value={val || ''}
-                          onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none resize-none ${val ? 'bg-white' : 'bg-rose-50'}`}
-                        />
-                      )}
-
-                      {/* Number */}
-                      {field.type === 'number' && (
-                        <input
-                          type="number"
-                          value={val !== undefined ? val : ''}
-                          onChange={(e) =>
-                            handleCustomValueChange(field.id, e.target.value === '' ? '' : Number(e.target.value))
+                    // Auto-fill matching custom fields
+                    if (hierarchyConfig!.levels && hierarchyConfig!.levels.length > 0) {
+                      const newCustomVals = { ...customValues };
+                      hierarchyConfig!.levels.forEach((lvlName, idx) => {
+                        if (selectedPath[idx]) {
+                          const matchedField = customFields.find(
+                            (f) => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
+                          );
+                          if (matchedField) {
+                            newCustomVals[matchedField.id] = selectedPath[idx];
                           }
-                          onWheel={(e) => e.currentTarget.blur()}
-                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val !== undefined && val !== '' ? 'bg-white' : 'bg-rose-50'}`}
-                        />
-                      )}
-
-                      {/* Select */}
-                      {field.type === 'select' && (
-                        <select
-                          value={val || ''}
-                          onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
-                        >
-                          <option value="">-- Seleccionar --</option>
-                          {field.options?.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      {/* Date */}
-                      {field.type === 'date' && (
-                        <input
-                          type="date"
-                          value={val || ''}
-                          onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
-                        />
-                      )}
-
-                      {/* Email */}
-                      {field.type === 'email' && (
-                        <input
-                          type="email"
-                          value={val || ''}
-                          onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
-                        />
-                      )}
-
-                      {/* Checkbox */}
-                      {field.type === 'checkbox' && (
-                        <label className="inline-flex items-center gap-2 mt-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(val)}
-                            onChange={(e) => handleCustomValueChange(field.id, e.target.checked)}
-                            className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300"
-                          />
-                          <span className="text-xs text-slate-700 font-medium">Marcar como activado</span>
-                        </label>
-                      )}
-
-                      {fieldError && (
-                        <p className="text-rose-600 text-xs mt-1 flex items-center gap-1 font-medium">
-                          <AlertCircle className="w-3 h-3" />
-                          {fieldError}
-                        </p>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
+                        }
+                      });
+                      setCustomValues(newCustomVals);
+                    }
+                  }}
+                />
               </div>
-            </div>
-        )}
+            );
+
+            const renderFieldRow = (field: CustomField) => {
+              const val = customValues[field.id];
+              const fieldError = errors[field.id];
+
+              return (
+                <div
+                  key={field.id}
+                  className={field.type === 'textarea' ? 'md:col-span-2' : ''}
+                >
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {field.label} {field.required && <span className="text-rose-600">*</span>}
+                    {field.requiredToClose && !field.required && (
+                      <span className="text-rose-400 text-[10px] font-medium ml-1">(req. para cerrar)</span>
+                    )}
+                  </label>
+
+                  {/* Text input */}
+                  {field.type === 'text' && (
+                    <input
+                      type="text"
+                      value={val || ''}
+                      onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
+                    />
+                  )}
+
+                  {/* Textarea */}
+                  {field.type === 'textarea' && (
+                    <textarea
+                      rows={3}
+                      value={val || ''}
+                      onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none resize-none ${val ? 'bg-white' : 'bg-rose-50'}`}
+                    />
+                  )}
+
+                  {/* Number */}
+                  {field.type === 'number' && (
+                    <input
+                      type="number"
+                      value={val !== undefined ? val : ''}
+                      onChange={(e) =>
+                        handleCustomValueChange(field.id, e.target.value === '' ? '' : Number(e.target.value))
+                      }
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val !== undefined && val !== '' ? 'bg-white' : 'bg-rose-50'}`}
+                    />
+                  )}
+
+                  {/* Select */}
+                  {field.type === 'select' && (
+                    <select
+                      value={val || ''}
+                      onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
+                    >
+                      <option value="">-- Seleccionar --</option>
+                      {field.options?.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Date */}
+                  {field.type === 'date' && (
+                    <input
+                      type="date"
+                      value={val || ''}
+                      onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
+                    />
+                  )}
+
+                  {/* Email */}
+                  {field.type === 'email' && (
+                    <input
+                      type="email"
+                      value={val || ''}
+                      onChange={(e) => handleCustomValueChange(field.id, e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val ? 'bg-white' : 'bg-rose-50'}`}
+                    />
+                  )}
+
+                  {/* Checkbox */}
+                  {field.type === 'checkbox' && (
+                    <label className="inline-flex items-center gap-2 mt-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(val)}
+                        onChange={(e) => handleCustomValueChange(field.id, e.target.checked)}
+                        className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300"
+                      />
+                      <span className="text-xs text-slate-700 font-medium">Marcar como activado</span>
+                    </label>
+                  )}
+
+                  {fieldError && (
+                    <p className="text-rose-600 text-xs mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3" />
+                      {fieldError}
+                    </p>
+                  )}
+                </div>
+              );
+            };
+
+            const areaGroups = sortedAreas
+              .map((area) => {
+                const fieldRows: Row[] = customFields
+                  .filter((f) => !f.isSystem && !f.hidden)
+                  .filter((f) => (f.areaId || defaultAreaId) === area.id)
+                  .filter((f) => !hierarchyLevelLabels.has(f.label.toLowerCase().trim()))
+                  .map((field) => ({ kind: 'field' as const, field }));
+
+                const rows: Row[] = [
+                  ...fieldRows,
+                  ...(hasHierarchy && hierarchyAreaId === area.id ? [{ kind: 'hierarchy' as const }] : []),
+                ].sort((a, b) => {
+                  const orderA = a.kind === 'field' ? a.field.order : hierarchyOrder;
+                  const orderB = b.kind === 'field' ? b.field.order : hierarchyOrder;
+                  return orderA - orderB;
+                });
+
+                return { area, rows };
+              })
+              .filter(({ rows }) => rows.length > 0);
+
+            if (areaGroups.length === 0) return null;
+
+            return (
+              <>
+                {areaGroups.map(({ area, rows }) => (
+                  <div key={area.id} className="pt-4 border-t border-slate-100">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <Tag className="w-4 h-4 text-slate-700" />
+                      {area.label}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {rows.map((row) => (row.kind === 'hierarchy' ? renderHierarchyRow() : renderFieldRow(row.field)))}
+                    </div>
+                  </div>
+                ))}
+              </>
+            );
+          })()}
 
           {submitError && (
             <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">

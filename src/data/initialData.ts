@@ -1,4 +1,10 @@
-import { CaseRecord, CustomField } from '../types';
+import { CaseRecord, CustomField, FieldArea } from '../types';
+
+export const GENERAL_AREA_ID = 'general';
+
+export const DEFAULT_FIELD_AREAS: FieldArea[] = [
+  { id: GENERAL_AREA_ID, label: 'Todos los Campos del Sistema y Personalizados', order: 1 },
+];
 
 export const DEFAULT_FIELDS: CustomField[] = [
   {

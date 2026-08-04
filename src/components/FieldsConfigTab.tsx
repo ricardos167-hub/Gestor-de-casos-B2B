@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  ArrowUp, 
-  ArrowDown, 
-  Edit3, 
-  Check, 
-  X, 
-  Settings2, 
-  Sparkles, 
-  Eye, 
-  Tag, 
+import {
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Edit3,
+  Check,
+  X,
+  Settings2,
+  Sparkles,
+  Eye,
+  Tag,
   SlidersHorizontal,
   HelpCircle,
   Type,
@@ -22,9 +22,12 @@ import {
   Layers,
   CheckCircle2,
   AlertCircle,
-  EyeOff
+  EyeOff,
+  LayoutGrid,
+  Lock
 } from 'lucide-react';
-import { CustomField, FieldType, HierarchyPresetConfig } from '../types';
+import { CustomField, FieldType, HierarchyPresetConfig, FieldArea } from '../types';
+import { GENERAL_AREA_ID } from '../data/initialData';
 import { parseExcelToHierarchy, downloadHierarchyTemplateExcel } from '../utils/excelHierarchyParser';
 import { confirmTripleDelete } from '../utils/confirmDelete';
 import { HierarchyButtonSelector } from './HierarchyButtonSelector';
@@ -37,6 +40,8 @@ interface FieldsConfigTabProps {
   onReorderFields: (newOrderedFields: CustomField[]) => void;
   hierarchyConfig?: HierarchyPresetConfig | null;
   onSaveHierarchyConfig?: (config: HierarchyPresetConfig) => void;
+  fieldAreas: FieldArea[];
+  onSaveFieldAreas: (areas: FieldArea[]) => void;
 }
 
 export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
@@ -47,10 +52,15 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
   onReorderFields,
   hierarchyConfig,
   onSaveHierarchyConfig,
+  fieldAreas,
+  onSaveFieldAreas,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [createFieldError, setCreateFieldError] = useState<string | null>(null);
+
+  const sortedAreas = [...fieldAreas].sort((a, b) => a.order - b.order);
+  const defaultAreaId = sortedAreas[0]?.id || GENERAL_AREA_ID;
 
   // New Field Form state
   const [newLabel, setNewLabel] = useState('');
@@ -59,6 +69,8 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
   const [newRequired, setNewRequired] = useState(false);
   const [newShowInTable, setNewShowInTable] = useState(true);
   const [newHidden, setNewHidden] = useState(false);
+  const [newRequiredToClose, setNewRequiredToClose] = useState(false);
+  const [newAreaId, setNewAreaId] = useState(defaultAreaId);
 
   // Editing field state
   const [editLabel, setEditLabel] = useState('');
@@ -66,6 +78,39 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
   const [editRequired, setEditRequired] = useState(false);
   const [editShowInTable, setEditShowInTable] = useState(true);
   const [editHidden, setEditHidden] = useState(false);
+  const [editRequiredToClose, setEditRequiredToClose] = useState(false);
+  const [editAreaId, setEditAreaId] = useState(defaultAreaId);
+
+  // Field Areas management state
+  const [isAddingArea, setIsAddingArea] = useState(false);
+  const [newAreaLabel, setNewAreaLabel] = useState('');
+  const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
+  const [editAreaLabel, setEditAreaLabel] = useState('');
+
+  const handleAddArea = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAreaLabel.trim()) return;
+    const areaId = newAreaLabel
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_') + '_' + Math.floor(Math.random() * 1000);
+    const maxOrder = fieldAreas.reduce((max, a) => Math.max(max, a.order), 0);
+    onSaveFieldAreas([...fieldAreas, { id: areaId, label: newAreaLabel.trim(), order: maxOrder + 1 }]);
+    setNewAreaLabel('');
+    setIsAddingArea(false);
+  };
+
+  const startEditArea = (area: FieldArea) => {
+    setEditingAreaId(area.id);
+    setEditAreaLabel(area.label);
+  };
+
+  const handleSaveAreaEdit = (area: FieldArea) => {
+    if (!editAreaLabel.trim()) return;
+    onSaveFieldAreas(fieldAreas.map((a) => (a.id === area.id ? { ...a, label: editAreaLabel.trim() } : a)));
+    setEditingAreaId(null);
+  };
 
   // Excel Hierarchy Upload State
   const [excelUploadError, setExcelUploadError] = useState<string | null>(null);
@@ -134,6 +179,8 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
       showInTable: newShowInTable,
       isSystem: false,
       hidden: newHidden,
+      requiredToClose: newHidden ? false : newRequiredToClose,
+      areaId: newAreaId,
       order: customFields.length + 1,
     };
 
@@ -146,6 +193,8 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
       setNewRequired(false);
       setNewShowInTable(true);
       setNewHidden(false);
+      setNewRequiredToClose(false);
+      setNewAreaId(defaultAreaId);
       setIsAdding(false);
     } catch (err: any) {
       setCreateFieldError(err?.message || 'No se pudo crear el campo. Intenta de nuevo.');
@@ -159,6 +208,8 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
     setEditRequired(Boolean(field.required));
     setEditShowInTable(field.showInTable !== false);
     setEditHidden(Boolean(field.hidden));
+    setEditRequiredToClose(Boolean(field.requiredToClose));
+    setEditAreaId(field.areaId || defaultAreaId);
   };
 
   const handleSaveFieldEdit = (field: CustomField) => {
@@ -173,6 +224,8 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
       required: editHidden ? false : editRequired,
       showInTable: editShowInTable,
       hidden: editHidden,
+      requiredToClose: editHidden ? false : editRequiredToClose,
+      areaId: editAreaId,
     };
 
     onUpdateField(updated);
@@ -278,6 +331,111 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
           <Plus className="w-4 h-4" />
           <span>{isAdding ? 'Cerrar Creador' : 'Crear Nuevo Campo'}</span>
         </button>
+      </div>
+
+      {/* SECTION: FIELD AREAS (editable section headings) */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+              <LayoutGrid className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Áreas de Campos</h3>
+              <p className="text-xs text-slate-500">
+                Agrupa los campos en secciones con su propio título dentro del formulario de casos.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsAddingArea(!isAddingArea)}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Nueva Área</span>
+          </button>
+        </div>
+
+        {isAddingArea && (
+          <form onSubmit={handleAddArea} className="flex items-center gap-2">
+            <input
+              type="text"
+              autoFocus
+              placeholder="ej: Datos del Cliente, Información Técnica"
+              value={newAreaLabel}
+              onChange={(e) => setNewAreaLabel(e.target.value)}
+              className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+            />
+            <button
+              type="submit"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg cursor-pointer flex items-center gap-1"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Crear</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsAddingArea(false); setNewAreaLabel(''); }}
+              className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </form>
+        )}
+
+        <div className="space-y-1.5">
+          {sortedAreas.map((area) => {
+            const fieldCount = customFields.filter((f) => (f.areaId || defaultAreaId) === area.id).length;
+            const isEditingArea = editingAreaId === area.id;
+            return (
+              <div key={area.id} className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-lg px-3 py-2">
+                {isEditingArea ? (
+                  <>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={editAreaLabel}
+                      onChange={(e) => setEditAreaLabel(e.target.value)}
+                      className="flex-1 px-2 py-1 rounded border border-slate-300 text-xs bg-white outline-none focus:border-slate-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveAreaEdit(area)}
+                      className="text-emerald-700 hover:text-emerald-800 p-1 cursor-pointer"
+                      title="Guardar"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingAreaId(null)}
+                      className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                      title="Cancelar"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-xs font-semibold text-slate-800">{area.label}</span>
+                    <span className="text-[10px] font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                      {fieldCount} {fieldCount === 1 ? 'campo' : 'campos'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => startEditArea(area)}
+                      className="text-slate-400 hover:text-slate-800 p-1 cursor-pointer"
+                      title="Renombrar área"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* SECTION: EXCEL HIERARCHICAL BUTTONS CONFIGURATION */}
@@ -455,8 +613,24 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                 </div>
               )}
 
+              {/* Area Selector */}
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Área del Formulario
+                </label>
+                <select
+                  value={newAreaId}
+                  onChange={(e) => setNewAreaId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 bg-white"
+                >
+                  {sortedAreas.map((area) => (
+                    <option key={area.id} value={area.id}>{area.label}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Flags: Required & Show in table */}
-              <div className="flex items-center gap-6 pt-2">
+              <div className="md:col-span-2 flex items-center gap-6 pt-2 flex-wrap">
                 <label className="inline-flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -465,6 +639,17 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                     className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300"
                   />
                   <span className="text-xs font-medium text-slate-700">Obligatorio al guardar</span>
+                </label>
+
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newRequiredToClose}
+                    onChange={(e) => setNewRequiredToClose(e.target.checked)}
+                    disabled={newHidden}
+                    className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300 disabled:opacity-40"
+                  />
+                  <span className={`text-xs font-medium ${newHidden ? 'text-slate-400' : 'text-slate-700'}`}>Obligatorio para cerrar el caso</span>
                 </label>
 
                 <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -489,8 +674,14 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
               </div>
 
               {newHidden && (
-                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <p className="md:col-span-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   Este campo no aparecerá al crear un caso nuevo y dejará de ser obligatorio automáticamente.
+                </p>
+              )}
+
+              {newRequiredToClose && !newHidden && (
+                <p className="md:col-span-2 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                  Se podrá crear el caso con este campo vacío, pero no se podrá cambiar el Estado a "Cerrado" hasta completarlo.
                 </p>
               )}
 
@@ -649,6 +840,15 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                             Requerido
                           </span>
                         )}
+                        {field.requiredToClose && (
+                          <span className="text-[10px] font-medium text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Lock className="w-3 h-3" /> Obligatorio para cerrar
+                          </span>
+                        )}
+                        <span className="text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <LayoutGrid className="w-3 h-3" />
+                          {sortedAreas.find((a) => a.id === (field.areaId || defaultAreaId))?.label || 'Área General'}
+                        </span>
                         {field.showInTable && !field.hidden && (
                           <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
                             <Eye className="w-3 h-3" /> Visible en Tabla
@@ -709,9 +909,24 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                             />
                           </div>
                         )}
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Área del Formulario
+                          </label>
+                          <select
+                            value={editAreaId}
+                            onChange={(e) => setEditAreaId(e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white focus:border-slate-900 outline-none"
+                          >
+                            {sortedAreas.map((area) => (
+                              <option key={area.id} value={area.id}>{area.label}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-6 pt-1">
+                      <div className="flex items-center gap-6 pt-1 flex-wrap">
                         <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
                           <input
                             type="checkbox"
@@ -720,6 +935,17 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                             className="rounded text-slate-900 focus:ring-slate-900"
                           />
                           <span>Marcar como Requerido</span>
+                        </label>
+
+                        <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editRequiredToClose}
+                            onChange={(e) => setEditRequiredToClose(e.target.checked)}
+                            disabled={editHidden}
+                            className="rounded text-slate-900 focus:ring-slate-900 disabled:opacity-40"
+                          />
+                          <span className={editHidden ? 'text-slate-400' : ''}>Obligatorio para cerrar el caso</span>
                         </label>
 
                         <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
@@ -746,6 +972,12 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                       {editHidden && (
                         <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                           Este campo no aparecerá al crear un caso nuevo y dejará de ser obligatorio automáticamente.
+                        </p>
+                      )}
+
+                      {editRequiredToClose && !editHidden && (
+                        <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                          No se podrá cambiar el Estado a "Cerrado" mientras este campo esté vacío.
                         </p>
                       )}
                     </div>
