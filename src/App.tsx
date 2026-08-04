@@ -37,6 +37,10 @@ function getStoredProfile(email: string): UserProfile | null {
   }
 }
 
+function storeProfile(email: string, profile: UserProfile) {
+  localStorage.setItem(`ticketera_profile_${email}`, JSON.stringify(profile));
+}
+
 export default function App() {
   // User Authentication State
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => {
@@ -177,6 +181,23 @@ export default function App() {
 
   // Case actions (persisted live to Firestore)
   const handleSaveNewCase = async (newCase: CaseRecord) => {
+    // If the user changed Origen/Programa away from their inherited default
+    // while creating this case, that new value becomes the default going forward.
+    if (currentUserEmail) {
+      const newOrigen = newCase.customValues.origen;
+      const newPrograma = newCase.customValues.programa;
+      if (
+        (newOrigen && newOrigen !== currentUserProfile?.origen) ||
+        (newPrograma && newPrograma !== currentUserProfile?.programa)
+      ) {
+        const updatedProfile: UserProfile = {
+          origen: newOrigen || currentUserProfile?.origen || '',
+          programa: newPrograma || currentUserProfile?.programa || '',
+        };
+        setCurrentUserProfile(updatedProfile);
+        storeProfile(currentUserEmail, updatedProfile);
+      }
+    }
     await saveCaseToFirestore(newCase);
   };
 
