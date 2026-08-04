@@ -90,12 +90,17 @@ export default function App() {
   const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
   const [selectedCaseForModal, setSelectedCaseForModal] = useState<CaseRecord | null>(null);
 
+  // True until the cases listener delivers its first snapshot, so the table
+  // can show a loading state instead of a misleading "no cases found".
+  const [isLoadingCases, setIsLoadingCases] = useState(true);
+
   // Real-time Firestore subscriptions
   useEffect(() => {
     const unsubscribeCases = subscribeToCases((fetchedCases) => {
       // Filter out old legacy demo mock cases CAS-1001 through CAS-1005 if present
       const cleanCases = fetchedCases.filter((c) => !['CAS-1001', 'CAS-1002', 'CAS-1003', 'CAS-1004', 'CAS-1005'].includes(c.id));
       setCases(cleanCases);
+      setIsLoadingCases(false);
     });
 
     const unsubscribeFields = subscribeToCustomFields((fetchedFields) => {
@@ -300,6 +305,7 @@ export default function App() {
             onDeleteCases={handleDeleteCases}
             onReorderFields={handleReorderFields}
             currentUserEmail={currentUserEmail || 'invitado@empresa.com'}
+            isLoading={isLoadingCases}
           />
         )}
 

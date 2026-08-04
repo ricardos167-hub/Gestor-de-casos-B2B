@@ -8,7 +8,9 @@ import {
   setDoc,
   deleteDoc,
   writeBatch,
-  runTransaction
+  runTransaction,
+  persistentLocalCache,
+  persistentMultipleTabManager
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig } from '../types';
@@ -23,9 +25,19 @@ const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestor
 // fields left as `undefined` (e.g. a non-select CustomField's `options`);
 // without this, Firestore throws on write and the error is silently swallowed
 // by callers that don't await/catch, making the UI look like "nothing happened".
+//
+// localCache (persistentLocalCache): caches all Firestore data in the browser's
+// IndexedDB. onSnapshot listeners fire immediately from that local cache on
+// startup (near-instant table load) while Firestore syncs with the server in
+// the background — instead of the table sitting empty until the first network
+// round trip completes. persistentMultipleTabManager avoids the "failed-precondition"
+// error when the app is open in more than one browser tab at once.
 export const db = (() => {
   try {
-    return initializeFirestore(app, { ignoreUndefinedProperties: true }, databaseId);
+    return initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    }, databaseId);
   } catch {
     // initializeFirestore throws if Firestore was already initialized for this app
     // (e.g. hot reload) — fall back to the existing instance.

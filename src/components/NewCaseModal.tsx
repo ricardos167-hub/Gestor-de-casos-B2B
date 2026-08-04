@@ -410,6 +410,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                           onChange={(e) =>
                             handleCustomValueChange(field.id, e.target.value === '' ? '' : Number(e.target.value))
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                           className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none ${val !== undefined && val !== '' ? 'bg-white' : 'bg-rose-50'}`}
                         />
                       )}

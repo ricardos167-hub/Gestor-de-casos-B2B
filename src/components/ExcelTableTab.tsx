@@ -1,22 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Download, 
-  Filter, 
-  ArrowUpDown, 
-  ArrowUp, 
-  ArrowDown, 
-  SlidersHorizontal, 
-  Check, 
-  X, 
-  Trash2, 
+import {
+  Download,
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  SlidersHorizontal,
+  X,
+  Trash2,
   CheckSquare,
-  Square, 
-  FileSpreadsheet, 
-  Search, 
-  Plus,
-  RefreshCw,
-  Edit2,
-  GripVertical
+  Square,
+  FileSpreadsheet,
+  GripVertical,
+  Loader2
 } from 'lucide-react';
 import { CaseRecord, CustomField, SortConfig } from '../types';
 import { confirmTripleDelete } from '../utils/confirmDelete';
@@ -30,6 +26,7 @@ interface ExcelTableTabProps {
   onDeleteCases: (caseIds: string[]) => void;
   onReorderFields?: (newFields: CustomField[]) => void;
   currentUserEmail: string;
+  isLoading?: boolean;
 }
 
 export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
@@ -41,11 +38,8 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
   onDeleteCases,
   onReorderFields,
   currentUserEmail,
+  isLoading,
 }) => {
-  // Editing state: { caseId, fieldId } or null
-  const [editingCell, setEditingCell] = useState<{ caseId: string; fieldId: string } | null>(null);
-  const [editValue, setEditValue] = useState<any>('');
-
   // Column Filters state: map of fieldId -> filter text
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [showFilterBar, setShowFilterBar] = useState(true);
@@ -221,17 +215,10 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
     });
   }, [processedCases]);
 
-  // Start Cell Editing — only "estado" is editable directly from the table;
-  // every other cell click opens the full case detail instead.
-  const startEditing = (caseRecord: CaseRecord, fieldId: string) => {
-    if (fieldId !== 'estado') return;
-
-    setEditingCell({ caseId: caseRecord.id, fieldId });
-    setEditValue(caseRecord.estado !== undefined ? caseRecord.estado : '');
-  };
-
-  // Save Cell Edit
-  const saveCellEdit = (caseRecord: CaseRecord, fieldId: string, newValue: any) => {
+  // Nothing is editable directly from the table anymore — every cell click
+  // opens the full case detail. This helper remains only for the bulk
+  // "Cambiar Estado" dropdown, which is a separate action, not inline editing.
+  const updateCaseField = (caseRecord: CaseRecord, fieldId: string, newValue: any) => {
     const now = new Date().toISOString();
     let updated: CaseRecord = { ...caseRecord, fechaActualizacion: now };
 
@@ -251,12 +238,11 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
         id: `h-${Date.now()}`,
         timestamp: now,
         userEmail: currentUserEmail,
-        action: `Campo "${fieldId}" actualizado en celda por ${currentUserEmail}.`,
+        action: `Campo "${fieldId}" actualizado por ${currentUserEmail}.`,
       },
     ];
 
     onUpdateCase(updated);
-    setEditingCell(null);
   };
 
   // Export to CSV
@@ -297,7 +283,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
     selectedCaseIds.forEach((id) => {
       const c = cases.find((item) => item.id === id);
       if (c) {
-        saveCellEdit(c, 'estado', newStatus);
+        updateCaseField(c, 'estado', newStatus);
       }
     });
     setSelectedCaseIds([]);
@@ -356,7 +342,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-xs font-medium text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80">
             <FileSpreadsheet className="w-4 h-4 text-slate-700" />
-            <span>Mostrando {processedCases.length} de {cases.length} casos</span>
+            <span>{isLoading ? 'Cargando casos...' : `Mostrando ${processedCases.length} de ${cases.length} casos`}</span>
           </div>
 
           <button
@@ -568,7 +554,14 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
 
             {/* Table Body */}
             <tbody className="divide-y divide-slate-100 bg-white">
-              {processedCases.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={activeColumns.length + 1} className="text-center py-12 text-slate-400">
+                    <Loader2 className="w-6 h-6 text-slate-300 mx-auto mb-2 animate-spin" />
+                    <p className="text-xs font-medium">Cargando casos...</p>
+                  </td>
+                </tr>
+              ) : processedCases.length === 0 ? (
                 <tr>
                   <td colSpan={activeColumns.length + 1} className="text-center py-12 text-slate-400">
                     <FileSpreadsheet className="w-8 h-8 text-slate-300 mx-auto mb-2" />
@@ -600,11 +593,8 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
                         </button>
                       </td>
 
-                      {/* Active Columns Cells */}
+                      {/* Active Columns Cells — clicking any cell opens the case detail */}
                       {activeColumns.map((col) => {
-                        const isEditingThisCell =
-                          editingCell?.caseId === c.id && editingCell?.fieldId === col.id;
-
                         let rawValue: any = ['id', 'titulo', 'solicitanteEmail', 'estado', 'prioridad', 'creadoPor', 'fechaCreacion'].includes(col.id)
                           ? (c as any)[col.id]
                           : c.customValues[col.id];
@@ -612,113 +602,41 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
                         return (
                           <td
                             key={col.id}
-                            onClick={() => {
-                              if (isEditingThisCell) return;
-                              if (col.id === 'estado') {
-                                startEditing(c, 'estado');
-                              } else {
-                                onSelectCase(c);
-                              }
-                            }}
-                            title={col.id === 'estado' ? 'Clic para cambiar el estado' : 'Clic para abrir el detalle del caso'}
+                            onClick={() => onSelectCase(c)}
+                            title="Clic para abrir el detalle del caso"
                             className="px-3 py-2 border-r border-slate-100 relative group cursor-pointer hover:bg-slate-100/50"
                           >
-                            {/* Inline Editing Mode */}
-                            {isEditingThisCell ? (
-                              <div className="flex items-center gap-1 bg-white border-2 border-slate-900 rounded p-0.5 shadow-2xs">
-                                {col.type === 'select' ? (
-                                  <select
-                                    autoFocus
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    onBlur={() => saveCellEdit(c, col.id, editValue)}
-                                    className="w-full text-xs outline-none bg-white font-medium"
-                                  >
-                                    {col.options?.map((opt) => (
-                                      <option key={opt} value={opt}>
-                                        {opt}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : col.type === 'checkbox' ? (
-                                  <input
-                                    type="checkbox"
-                                    autoFocus
-                                    checked={Boolean(editValue)}
-                                    onChange={(e) => {
-                                      setEditValue(e.target.checked);
-                                      saveCellEdit(c, col.id, e.target.checked);
-                                    }}
-                                  />
-                                ) : col.type === 'date' ? (
-                                  <input
-                                    type="date"
-                                    autoFocus
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    onBlur={() => saveCellEdit(c, col.id, editValue)}
-                                    className="w-full text-xs outline-none"
-                                  />
-                                ) : (
-                                  <input
-                                    type="text"
-                                    autoFocus
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') saveCellEdit(c, col.id, editValue);
-                                      if (e.key === 'Escape') setEditingCell(null);
-                                    }}
-                                    onBlur={() => saveCellEdit(c, col.id, editValue)}
-                                    className="w-full text-xs outline-none"
-                                  />
-                                )}
-                                <button
-                                  onClick={() => saveCellEdit(c, col.id, editValue)}
-                                  className="text-emerald-700 hover:text-emerald-800 p-0.5"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ) : (
-                              /* Standard Render Mode */
-                              <div className="flex items-center justify-between gap-1 min-h-[22px]">
-                                {col.id === 'id' ? (
-                                  <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                    {rawValue}
-                                  </span>
-                                ) : col.id === 'estado' ? (
-                                  <span className={`px-2 py-0.5 rounded-full font-medium text-[11px] border ${getStatusBadgeClass(rawValue)}`}>
-                                    {rawValue}
-                                  </span>
-                                ) : col.id === 'prioridad' ? (
-                                  <span className={`px-2 py-0.5 rounded-full font-medium text-[11px] border ${getPriorityBadgeClass(rawValue)}`}>
-                                    {rawValue}
-                                  </span>
-                                ) : col.type === 'checkbox' ? (
-                                  <span className={`font-semibold ${rawValue ? 'text-emerald-700' : 'text-slate-300'}`}>
-                                    {rawValue ? '✓ Sí' : '—'}
-                                  </span>
-                                ) : col.id === 'fechaCreacion' ? (
-                                  <span className="text-slate-500 font-mono text-[11px]">
-                                    {new Date(rawValue).toLocaleDateString()}
-                                  </span>
-                                ) : (
-                                  <span className="truncate max-w-[200px] font-medium text-slate-800" title={String(rawValue || '')}>
-                                    {rawValue !== undefined && rawValue !== null && rawValue !== '' ? (
-                                      String(rawValue)
-                                    ) : (
-                                      <span className="text-slate-300 italic">—</span>
-                                    )}
-                                  </span>
-                                )}
-
-                                {/* Hover Edit Pencil Indicator — only Estado is editable inline */}
-                                {col.id === 'estado' && (
-                                  <Edit2 className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                                )}
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between gap-1 min-h-[22px]">
+                              {col.id === 'id' ? (
+                                <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                  {rawValue}
+                                </span>
+                              ) : col.id === 'estado' ? (
+                                <span className={`px-2 py-0.5 rounded-full font-medium text-[11px] border ${getStatusBadgeClass(rawValue)}`}>
+                                  {rawValue}
+                                </span>
+                              ) : col.id === 'prioridad' ? (
+                                <span className={`px-2 py-0.5 rounded-full font-medium text-[11px] border ${getPriorityBadgeClass(rawValue)}`}>
+                                  {rawValue}
+                                </span>
+                              ) : col.type === 'checkbox' ? (
+                                <span className={`font-semibold ${rawValue ? 'text-emerald-700' : 'text-slate-300'}`}>
+                                  {rawValue ? '✓ Sí' : '—'}
+                                </span>
+                              ) : col.id === 'fechaCreacion' ? (
+                                <span className="text-slate-500 font-mono text-[11px]">
+                                  {new Date(rawValue).toLocaleDateString()}
+                                </span>
+                              ) : (
+                                <span className="truncate max-w-[200px] font-medium text-slate-800" title={String(rawValue || '')}>
+                                  {rawValue !== undefined && rawValue !== null && rawValue !== '' ? (
+                                    String(rawValue)
+                                  ) : (
+                                    <span className="text-slate-300 italic">—</span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           </td>
                         );
                       })}
@@ -741,7 +659,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
             )}
           </div>
           <span className="text-slate-400 text-[11px]">
-            Clic en Estado para cambiarlo aquí mismo · clic en cualquier otra celda para abrir el detalle del caso
+            Clic en cualquier celda para abrir el detalle del caso
           </span>
         </div>
       </div>
