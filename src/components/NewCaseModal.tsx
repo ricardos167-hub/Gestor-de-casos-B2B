@@ -212,7 +212,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Registrado por (Agente Actual)
                 </label>
-                <div className="px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 truncate">
+                <div className="px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs font-medium text-slate-600 truncate">
                   {currentUserEmail}
                 </div>
               </div>
