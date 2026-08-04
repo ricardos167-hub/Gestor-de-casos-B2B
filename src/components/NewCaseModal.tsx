@@ -273,7 +273,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
 
               {/* Estado */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{estadoField?.label || 'Estado'} Inicial</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{estadoField?.label || 'Estado'}</label>
                 <select
                   value={estado}
                   onChange={(e) => setEstado(e.target.value)}
@@ -361,7 +361,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                 >
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     {field.label} {field.required && <span className="text-rose-600">*</span>}
-                    {field.requiredToClose && !field.required && (
+                    {field.requiredToClose && !field.required && estado.trim().toLowerCase() === 'cerrado' && (
                       <span className="text-rose-400 text-[10px] font-medium ml-1">(req. para cerrar)</span>
                     )}
                   </label>
