@@ -176,7 +176,13 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
         ],
       };
 
-      await onSave(newCaseRecord);
+      // Don't await the server round-trip: Firestore applies the write to its
+      // local cache (and fires the table's onSnapshot listener) immediately,
+      // so the table already shows the new case well before the server acks.
+      // Waiting here just made the modal sit on "Guardando..." for no benefit.
+      Promise.resolve(onSave(newCaseRecord)).catch((err) => {
+        console.error('Error al confirmar el caso con el servidor:', err);
+      });
       onClose();
     } catch (err: any) {
       setSubmitError(err?.message || 'No se pudo registrar el caso. Intenta de nuevo.');
