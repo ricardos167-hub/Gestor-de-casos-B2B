@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "cases": {
+      "title": "Cases",
+      "description": "Collection of cases and tickets for real-time tracking",
+      "type": "collection",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "titulo": { "type": "string" },
+          "solicitanteEmail": { "type": "string" },
+          "creadoPor": { "type": "string" },
+          "fechaCreacion": { "type": "string" },
+          "fechaActualizacion": { "type": "string" },
+          "estado": { "type": "string" },
+          "prioridad": { "type": "string" },
+          "customValues": { "type": "object" },
+          "comentarios": { "type": "array" },
+          "historial": { "type": "array" }
+        },
+        "required": ["id", "titulo", "solicitanteEmail", "creadoPor", "fechaCreacion", "estado", "prioridad"]
+      }
+    },
+    "customFields": {
+      "title": "Custom Fields",
+      "description": "Custom field definitions for cases",
+      "type": "collection",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "required": { "type": "boolean" },
+          "options": { "type": "array" },
+          "order": { "type": "number" }
+        },
+        "required": ["id", "name", "type"]
+      }
+    }
+  }
+}

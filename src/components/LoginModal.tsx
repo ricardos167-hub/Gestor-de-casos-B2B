@@ -1,0 +1,166 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Mail, LogIn, Shield, Lock } from 'lucide-react';
+
+interface LoginModalProps {
+  onLogin: (email: string) => void;
+  currentEmail?: string;
+}
+
+// SHA-256 hash of the Super Admin password. Not sent anywhere and never stored
+// in plain text in the bundle. NOTE: this still does not stop a determined
+// attacker (client-side checks can always be bypassed / brute-forced against
+// the hash in devtools) — real access control must live in Firestore rules
+// tied to a Firebase Auth identity.
+const SUPER_ADMIN_EMAIL = 'ricardo.s167@gmail.com';
+const SUPER_ADMIN_PASSWORD_HASH = '19b67056b896b5320ba3201c4745f8c87439da78314435e49842f7cf2e653b76';
+
+async function sha256Hex(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail }) => {
+  const [emailInput, setEmailInput] = useState(currentEmail || '');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [error, setError] = useState('');
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  const isSuperAdminEmail = emailInput.trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+
+  useEffect(() => {
+    if (isSuperAdminEmail) {
+      setTimeout(() => {
+        passwordInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isSuperAdminEmail]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = emailInput.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      setError('Por favor ingresa un correo electrónico válido');
+      return;
+    }
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setError('El formato del correo no es válido (ejemplo: usuario@empresa.com)');
+      return;
+    }
+
+    if (cleanEmail === SUPER_ADMIN_EMAIL) {
+      if (!passwordInput.trim()) {
+        setError('🔒 Esta cuenta es de Super Admin. Por favor ingresa tu contraseña.');
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 50);
+        return;
+      }
+      const enteredHash = await sha256Hex(passwordInput.trim());
+      if (enteredHash !== SUPER_ADMIN_PASSWORD_HASH) {
+        setError('Contraseña incorrecta.');
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 50);
+        return;
+      }
+    }
+
+    setError('');
+    onLogin(cleanEmail);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden transform transition-all">
+        {/* Top Header */}
+        <div className="bg-slate-900 p-6 text-white text-center relative border-b border-slate-800">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-slate-800 text-slate-100 mb-3 border border-slate-700">
+            <Shield className="w-6 h-6 text-slate-200" />
+          </div>
+          <h2 className="text-xl font-bold tracking-tight">Sistema de Tickets y Casos</h2>
+          <p className="text-slate-300 text-xs mt-1">Ingresa tu correo para identificarte en el sistema</p>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <div>
+              <label htmlFor="email" className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                Correo Electrónico
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  id="email"
+                  value={emailInput}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value);
+                    setError('');
+                  }}
+                  placeholder="ejemplo: usuario@empresa.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-slate-900 text-xs transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Password input for Super Admin */}
+            {isSuperAdminEmail && (
+              <div className="animate-in fade-in duration-200">
+                <label htmlFor="password" className="block text-[11px] font-semibold uppercase tracking-wider text-amber-700 mb-1.5 flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5" />
+                  Contraseña Super Admin
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-amber-500">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    ref={passwordInputRef}
+                    type="password"
+                    id="password"
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value);
+                      setError('');
+                    }}
+                    placeholder="Ingresa tu contraseña"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-amber-300 bg-amber-50/40 focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-slate-900 text-xs transition-all"
+                  />
+                </div>
+                <p className="text-amber-700 text-[11px] mt-1 font-medium">
+                  Se requiere contraseña para iniciar sesión como Super Admin.
+                </p>
+              </div>
+            )}
+
+            {error && (
+              <p className="text-rose-600 text-xs font-medium bg-rose-50 border border-rose-200 p-2.5 rounded-lg">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-medium text-xs rounded-lg shadow-2xs transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Ingresar a la Ticketera</span>
+            </button>
+          </form>
+        </div>
+
+        <div className="bg-slate-50 px-6 py-2.5 border-t border-slate-100 text-center">
+          <p className="text-xs text-slate-500 flex items-center justify-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-slate-400" />
+            <span>Sistema Seguro de Control e Incidencias</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};

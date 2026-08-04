@@ -1,0 +1,6 @@
+{
+  "name": "Gestor de Casos y Tickets",
+  "description": "Sistema de gestión de tickets y casos de atención con campos personalizables, vista de tabla tipo Excel editable y filtrable, e ingreso por correo electrónico.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

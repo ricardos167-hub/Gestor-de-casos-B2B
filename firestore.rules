@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidCase(data) {
+      return data.keys().hasAll(['id', 'titulo', 'creadoPor', 'fechaCreacion', 'fechaActualizacion', 'estado', 'prioridad', 'customValues'])
+        && data.id is string && data.id.size() < 100
+        && data.titulo is string && data.titulo.size() < 5000
+        && data.creadoPor is string && data.creadoPor.size() < 300
+        && data.fechaCreacion is string
+        && data.fechaActualizacion is string
+        && data.estado is string && data.estado.size() < 200
+        && data.prioridad is string && data.prioridad.size() < 200
+        && data.customValues is map
+        && (!('solicitanteEmail' in data) || data.solicitanteEmail is string)
+        && (!('comentarios' in data) || data.comentarios is list)
+        && (!('historial' in data) || data.historial is list);
+    }
+
+    function isValidCustomField(data) {
+      return data.keys().hasAll(['id', 'label', 'type', 'order'])
+        && data.id is string && data.id.size() < 100
+        && data.label is string && data.label.size() < 500
+        && data.type in ['text', 'textarea', 'number', 'select', 'date', 'checkbox', 'email']
+        && data.order is number;
+    }
+
+    function isValidAppSettings(data) {
+      return data.keys().hasAll(['appTitle', 'appSubtitle'])
+        && data.appTitle is string && data.appTitle.size() < 200
+        && data.appSubtitle is string && data.appSubtitle.size() < 500;
+    }
+
+    function isValidHierarchyPresets(data) {
+      return data.keys().hasAll(['levels', 'tree'])
+        && data.levels is list
+        && data.tree is list;
+    }
+
+    match /cases/{caseId} {
+      allow read: if true;
+      allow create, update: if isValidCase(request.resource.data);
+      allow delete: if true;
+    }
+
+    match /customFields/{fieldId} {
+      allow read: if true;
+      allow create, update: if isValidCustomField(request.resource.data);
+      allow delete: if true;
+    }
+
+    match /appSettings/headerConfig {
+      allow read: if true;
+      allow write: if isValidAppSettings(request.resource.data);
+    }
+
+    match /appSettings/hierarchyPresets {
+      allow read: if true;
+      allow write: if isValidHierarchyPresets(request.resource.data);
+    }
+
+    // Deny anything outside the known collections/documents above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
