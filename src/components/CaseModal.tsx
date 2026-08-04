@@ -42,6 +42,19 @@ export const CaseModal: React.FC<CaseModalProps> = ({
   const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'history'>('details');
   const isAdmin = currentUserEmail?.trim().toLowerCase() === 'ricardo.s167@gmail.com';
 
+  // Base system fields are configurable (label, options) from Configurar Campos,
+  // so their live label/options are read from customFields instead of being hardcoded.
+  const tituloField = customFields.find((f) => f.id === 'titulo');
+  const estadoField = customFields.find((f) => f.id === 'estado');
+  const prioridadField = customFields.find((f) => f.id === 'prioridad');
+
+  const estadoOptions = estadoField?.options && estadoField.options.length > 0
+    ? estadoField.options
+    : ['Nuevo', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
+  const prioridadOptions = prioridadField?.options && prioridadField.options.length > 0
+    ? prioridadField.options
+    : ['Baja', 'Media', 'Alta', 'Crítica'];
+
   // Editable Form State
   const [titulo, setTitulo] = useState(caseRecord?.titulo ?? '');
   const [estado, setEstado] = useState(caseRecord?.estado ?? '');
@@ -201,7 +214,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
         {/* Status Bar */}
         <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
           <div className="flex items-center gap-3">
-            <span className="font-semibold text-slate-500">Estado:</span>
+            <span className="font-semibold text-slate-500">{estadoField?.label || 'Estado'}:</span>
             {!isEditing ? (
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeClass(caseRecord.estado)}`}>
                 {caseRecord.estado}
@@ -212,15 +225,13 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                 onChange={(e) => setEstado(e.target.value)}
                 className="px-2 py-1 rounded-md border border-slate-200 text-xs font-medium bg-white outline-none"
               >
-                <option value="Nuevo">Nuevo</option>
-                <option value="En Proceso">En Proceso</option>
-                <option value="En Espera">En Espera</option>
-                <option value="Resuelto">Resuelto</option>
-                <option value="Cerrado">Cerrado</option>
+                {estadoOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
               </select>
             )}
 
-            <span className="font-semibold text-slate-500 ml-2">Prioridad:</span>
+            <span className="font-semibold text-slate-500 ml-2">{prioridadField?.label || 'Prioridad'}:</span>
             {!isEditing ? (
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getPriorityBadgeClass(caseRecord.prioridad)}`}>
                 {caseRecord.prioridad}
@@ -231,10 +242,9 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                 onChange={(e) => setPrioridad(e.target.value)}
                 className="px-2 py-1 rounded-md border border-slate-200 text-xs font-medium bg-white outline-none"
               >
-                <option value="Baja">Baja</option>
-                <option value="Media">Media</option>
-                <option value="Alta">Alta</option>
-                <option value="Crítica">Crítica</option>
+                {prioridadOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
               </select>
             )}
           </div>
@@ -294,7 +304,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
               {/* System Main Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Título del Caso</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">{tituloField?.label || 'Título del Caso'}</label>
                   {!isEditing ? (
                     <div className="text-xs font-semibold text-slate-900 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
                       {caseRecord.titulo}

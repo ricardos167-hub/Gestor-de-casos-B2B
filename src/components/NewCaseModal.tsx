@@ -22,10 +22,25 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
   hierarchyConfig,
   userProfile,
 }) => {
+  // Base system fields are configurable (label, options) from Configurar Campos,
+  // so their live label/options are read from customFields instead of being hardcoded.
+  const tituloField = customFields.find((f) => f.id === 'titulo');
+  const estadoField = customFields.find((f) => f.id === 'estado');
+  const prioridadField = customFields.find((f) => f.id === 'prioridad');
+
+  const estadoOptions = estadoField?.options && estadoField.options.length > 0
+    ? estadoField.options
+    : ['Nuevo', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
+  const prioridadOptions = prioridadField?.options && prioridadField.options.length > 0
+    ? prioridadField.options
+    : ['Baja', 'Media', 'Alta', 'Crítica'];
+
   // System required fields
   const [titulo, setTitulo] = useState('');
-  const [estado, setEstado] = useState('Nuevo');
-  const [prioridad, setPrioridad] = useState('Media');
+  const [estado, setEstado] = useState(estadoOptions[0] || 'Nuevo');
+  const [prioridad, setPrioridad] = useState(
+    prioridadOptions.includes('Media') ? 'Media' : (prioridadOptions[0] || 'Media')
+  );
 
   // Custom values state
   const [customValues, setCustomValues] = useState<Record<string, any>>(() => {
@@ -171,7 +186,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
               {/* Titulo */}
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Título o Asunto del Caso <span className="text-rose-600">*</span>
+                  {tituloField?.label || 'Título o Asunto del Caso'} <span className="text-rose-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -204,32 +219,29 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
 
               {/* Estado */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Estado Inicial</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">{estadoField?.label || 'Estado'} Inicial</label>
                 <select
                   value={estado}
                   onChange={(e) => setEstado(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none bg-white"
                 >
-                  <option value="Nuevo">Nuevo</option>
-                  <option value="En Proceso">En Proceso</option>
-                  <option value="En Espera">En Espera</option>
-                  <option value="Resuelto">Resuelto</option>
-                  <option value="Cerrado">Cerrado</option>
+                  {estadoOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
                 </select>
               </div>
 
               {/* Prioridad */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nivel de Prioridad</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nivel de {prioridadField?.label || 'Prioridad'}</label>
                 <select
                   value={prioridad}
                   onChange={(e) => setPrioridad(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 text-xs outline-none bg-white"
                 >
-                  <option value="Baja">Baja</option>
-                  <option value="Media">Media</option>
-                  <option value="Alta">Alta</option>
-                  <option value="Crítica">Crítica</option>
+                  {prioridadOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
                 </select>
               </div>
 
