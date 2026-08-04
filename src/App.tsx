@@ -23,10 +23,30 @@ import {
   saveHierarchyPresetsToFirestore
 } from './lib/firebase';
 
+interface UserProfile {
+  origen: string;
+  programa: string;
+}
+
+function getStoredProfile(email: string): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(`ticketera_profile_${email}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
   // User Authentication State
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => {
     return localStorage.getItem('ticketera_user_email') || null;
+  });
+
+  // Origen/Programa selected at first login, inherited into new cases created by this user
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(() => {
+    const email = localStorage.getItem('ticketera_user_email');
+    return email ? getStoredProfile(email) : null;
   });
 
   const [showLoginModal, setShowLoginModal] = useState<boolean>(() => !currentUserEmail);
@@ -79,16 +99,29 @@ export default function App() {
         // Seed initial default fields if collection is completely empty
         setCustomFields(DEFAULT_FIELDS);
         saveAllCustomFieldsToFirestore(DEFAULT_FIELDS);
+        return;
+      }
+
+      let workingFields = fetchedFields;
+
+      const hasSystemFields = fetchedFields.some((f) => f.isSystem);
+      if (!hasSystemFields) {
+        const systemFields = DEFAULT_FIELDS.filter((f) => f.isSystem);
+        workingFields = [...systemFields, ...fetchedFields];
+      }
+
+      // Backfill default fields introduced after this install was first seeded
+      // (e.g. "origen", "programa") so existing deployments pick them up automatically.
+      const missingDefaults = DEFAULT_FIELDS.filter(
+        (df) => !workingFields.some((f) => f.id === df.id)
+      );
+
+      if (!hasSystemFields || missingDefaults.length > 0) {
+        const merged = [...workingFields, ...missingDefaults].map((item, idx) => ({ ...item, order: idx + 1 }));
+        setCustomFields(merged);
+        saveAllCustomFieldsToFirestore(merged);
       } else {
-        const hasSystemFields = fetchedFields.some((f) => f.isSystem);
-        if (!hasSystemFields) {
-          const systemFields = DEFAULT_FIELDS.filter((f) => f.isSystem);
-          const merged = [...systemFields, ...fetchedFields].map((item, idx) => ({ ...item, order: idx + 1 }));
-          setCustomFields(merged);
-          saveAllCustomFieldsToFirestore(merged);
-        } else {
-          setCustomFields(fetchedFields);
-        }
+        setCustomFields(fetchedFields);
       }
     });
 
@@ -129,13 +162,15 @@ export default function App() {
   }, [cases]);
 
   // Auth actions
-  const handleLogin = (email: string) => {
+  const handleLogin = (email: string, profile: UserProfile) => {
     setCurrentUserEmail(email);
+    setCurrentUserProfile(profile);
     setShowLoginModal(false);
   };
 
   const handleChangeUser = () => {
     setCurrentUserEmail(null);
+    setCurrentUserProfile(null);
     localStorage.removeItem('ticketera_user_email');
     setShowLoginModal(true);
   };
@@ -275,6 +310,7 @@ export default function App() {
         customFields={customFields}
         currentUserEmail={currentUserEmail || 'invitado@empresa.com'}
         hierarchyConfig={hierarchyConfig}
+        userProfile={currentUserProfile}
       />
 
       <CaseModal

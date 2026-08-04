@@ -131,6 +131,26 @@ export const DEFAULT_FIELDS: CustomField[] = [
     showInTable: false,
     isSystem: false,
     order: 15,
+  },
+  {
+    id: 'origen',
+    label: 'Origen',
+    type: 'select',
+    options: ['Call', 'Whatsapp', 'Otros'],
+    required: true,
+    showInTable: true,
+    isSystem: false,
+    order: 16,
+  },
+  {
+    id: 'programa',
+    label: 'Programa',
+    type: 'select',
+    options: ['Técnica Móvil', 'Técnica Fija', 'Otros'],
+    required: true,
+    showInTable: true,
+    isSystem: false,
+    order: 17,
   }
 ];
 

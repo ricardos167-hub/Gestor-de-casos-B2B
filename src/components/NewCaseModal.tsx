@@ -10,6 +10,7 @@ interface NewCaseModalProps {
   customFields: CustomField[];
   currentUserEmail: string;
   hierarchyConfig?: HierarchyPresetConfig | null;
+  userProfile?: { origen: string; programa: string } | null;
 }
 
 export const NewCaseModal: React.FC<NewCaseModalProps> = ({
@@ -19,6 +20,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
   customFields,
   currentUserEmail,
   hierarchyConfig,
+  userProfile,
 }) => {
   // System required fields
   const [titulo, setTitulo] = useState('');
@@ -29,7 +31,11 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
   const [customValues, setCustomValues] = useState<Record<string, any>>(() => {
     const initial: Record<string, any> = {};
     customFields.forEach((field) => {
-      if (field.defaultValue !== undefined) {
+      if (field.id === 'origen' && userProfile?.origen) {
+        initial[field.id] = userProfile.origen;
+      } else if (field.id === 'programa' && userProfile?.programa) {
+        initial[field.id] = userProfile.programa;
+      } else if (field.defaultValue !== undefined) {
         initial[field.id] = field.defaultValue;
       } else if (field.type === 'checkbox') {
         initial[field.id] = false;

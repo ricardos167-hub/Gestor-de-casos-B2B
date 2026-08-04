@@ -1,9 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mail, LogIn, Shield, Lock } from 'lucide-react';
+import { Mail, LogIn, Shield, Lock, Tag } from 'lucide-react';
+
+export interface UserProfile {
+  origen: string;
+  programa: string;
+}
 
 interface LoginModalProps {
-  onLogin: (email: string) => void;
+  onLogin: (email: string, profile: UserProfile) => void;
   currentEmail?: string;
+}
+
+const ORIGEN_OPTIONS = ['Call', 'Whatsapp', 'Otros'];
+const PROGRAMA_OPTIONS = ['Técnica Móvil', 'Técnica Fija', 'Otros'];
+
+function getStoredProfile(email: string): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(`ticketera_profile_${email}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeProfile(email: string, profile: UserProfile) {
+  localStorage.setItem(`ticketera_profile_${email}`, JSON.stringify(profile));
 }
 
 // SHA-256 hash of the Super Admin password. Not sent anywhere and never stored
@@ -23,10 +44,17 @@ async function sha256Hex(text: string): Promise<string> {
 export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail }) => {
   const [emailInput, setEmailInput] = useState(currentEmail || '');
   const [passwordInput, setPasswordInput] = useState('');
+  const [origenInput, setOrigenInput] = useState('');
+  const [programaInput, setProgramaInput] = useState('');
   const [error, setError] = useState('');
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
   const isSuperAdminEmail = emailInput.trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+
+  const cleanEmailLower = emailInput.trim().toLowerCase();
+  const isValidEmailFormat = cleanEmailLower.includes('@') && cleanEmailLower.includes('.');
+  const existingProfile = isValidEmailFormat ? getStoredProfile(cleanEmailLower) : null;
+  const needsProfileSelection = isValidEmailFormat && !existingProfile;
 
   useEffect(() => {
     if (isSuperAdminEmail) {
@@ -67,8 +95,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail })
       }
     }
 
+    const storedProfile = getStoredProfile(cleanEmail);
+    let profile = storedProfile;
+
+    if (!storedProfile) {
+      if (!origenInput || !programaInput) {
+        setError('Selecciona tu Origen y Programa para continuar (solo se pide la primera vez que ingresas).');
+        return;
+      }
+      profile = { origen: origenInput, programa: programaInput };
+      storeProfile(cleanEmail, profile);
+    }
+
     setError('');
-    onLogin(cleanEmail);
+    onLogin(cleanEmail, profile!);
   };
 
   return (
@@ -135,6 +175,56 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail })
                 <p className="text-amber-700 text-[11px] mt-1 font-medium">
                   Se requiere contraseña para iniciar sesión como Super Admin.
                 </p>
+              </div>
+            )}
+
+            {/* Origen / Programa selection - required only on the very first login for this nick */}
+            {needsProfileSelection && (
+              <div className="animate-in fade-in duration-200 space-y-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <p className="text-[11px] text-slate-600 font-medium flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-slate-500" />
+                  Primer ingreso: selecciona tu Origen y Programa (se guardará para tus próximos casos)
+                </p>
+
+                <div>
+                  <label htmlFor="origen" className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Origen
+                  </label>
+                  <select
+                    id="origen"
+                    value={origenInput}
+                    onChange={(e) => {
+                      setOrigenInput(e.target.value);
+                      setError('');
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-slate-900 text-xs bg-white transition-all"
+                  >
+                    <option value="">-- Seleccionar --</option>
+                    {ORIGEN_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="programa" className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Programa
+                  </label>
+                  <select
+                    id="programa"
+                    value={programaInput}
+                    onChange={(e) => {
+                      setProgramaInput(e.target.value);
+                      setError('');
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-slate-900 text-xs bg-white transition-all"
+                  >
+                    <option value="">-- Seleccionar --</option>
+                    {PROGRAMA_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
 
