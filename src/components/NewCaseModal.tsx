@@ -69,6 +69,10 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Reserved as soon as the modal opens (while the user is still filling the
+  // form) so clicking "Guardar" doesn't have to wait on the counter
+  // transaction's round trip — it's already resolved by then in practice.
+  const [reservedCaseId, setReservedCaseId] = useState<string | null>(null);
 
   // The modal never unmounts (App.tsx keeps it mounted so it can toggle isOpen),
   // so every value must be reset on each open. Only Origen/Programa should carry
@@ -82,6 +86,8 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
       setCustomValues(buildInitialCustomValues());
       setErrors({});
       setSubmitError(null);
+      setReservedCaseId(null);
+      getNextCaseId().then(setReservedCaseId).catch(() => setReservedCaseId(null));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -144,7 +150,9 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
 
     try {
       // Sequential correlative case number: RS000001, RS000002, ...
-      const caseId = await getNextCaseId();
+      // Normally already resolved (reserved when the modal opened); await as a
+      // fallback for the rare case the user submits before it comes back.
+      const caseId = reservedCaseId || (await getNextCaseId());
 
       const now = new Date().toISOString();
 
