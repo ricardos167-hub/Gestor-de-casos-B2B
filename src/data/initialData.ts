@@ -3,7 +3,7 @@ import { CaseRecord, CustomField } from '../types';
 export const DEFAULT_FIELDS: CustomField[] = [
   {
     id: 'id',
-    label: 'Código / ID',
+    label: 'Número de caso',
     type: 'text',
     required: true,
     showInTable: true,

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, AlertCircle, FileText, Check, Tag, Sparkles } from 'lucide-react';
 import { CaseRecord, CustomField, HierarchyPresetConfig } from '../types';
 import { HierarchyButtonSelector } from './HierarchyButtonSelector';
+import { getNextCaseId } from '../lib/firebase';
 
 interface NewCaseModalProps {
   isOpen: boolean;
@@ -35,15 +36,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
     ? prioridadField.options
     : ['Baja', 'Media', 'Alta', 'Crítica'];
 
-  // System required fields
-  const [titulo, setTitulo] = useState('');
-  const [estado, setEstado] = useState(estadoOptions[0] || 'Nuevo');
-  const [prioridad, setPrioridad] = useState(
-    prioridadOptions.includes('Media') ? 'Media' : (prioridadOptions[0] || 'Media')
-  );
-
-  // Custom values state
-  const [customValues, setCustomValues] = useState<Record<string, any>>(() => {
+  const buildInitialCustomValues = () => {
     const initial: Record<string, any> = {};
     customFields.forEach((field) => {
       if (field.id === 'origen' && userProfile?.origen) {
@@ -61,9 +54,37 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
       }
     });
     return initial;
-  });
+  };
+
+  // System required fields
+  const [titulo, setTitulo] = useState('');
+  const [estado, setEstado] = useState(estadoOptions[0] || 'Nuevo');
+  const [prioridad, setPrioridad] = useState(
+    prioridadOptions.includes('Media') ? 'Media' : (prioridadOptions[0] || 'Media')
+  );
+
+  // Custom values state
+  const [customValues, setCustomValues] = useState<Record<string, any>>(buildInitialCustomValues);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // The modal never unmounts (App.tsx keeps it mounted so it can toggle isOpen),
+  // so every value must be reset on each open. Only Origen/Programa should carry
+  // over between cases (inherited from the user's login profile); everything
+  // else must start blank again — not remember what was typed in the last case.
+  useEffect(() => {
+    if (isOpen) {
+      setTitulo('');
+      setEstado(estadoOptions[0] || 'Nuevo');
+      setPrioridad(prioridadOptions.includes('Media') ? 'Media' : (prioridadOptions[0] || 'Media'));
+      setCustomValues(buildInitialCustomValues());
+      setErrors({});
+      setSubmitError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -92,7 +113,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const newErrors: Record<string, string> = {};
@@ -118,34 +139,42 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
       return;
     }
 
-    // Generate unique ID like CAS-1006
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const caseId = `CAS-${randomSuffix}`;
+    setSubmitError(null);
+    setIsSubmitting(true);
 
-    const now = new Date().toISOString();
+    try {
+      // Sequential correlative case number: RS000001, RS000002, ...
+      const caseId = await getNextCaseId();
 
-    const newCaseRecord: CaseRecord = {
-      id: caseId,
-      titulo: titulo.trim(),
-      creadoPor: currentUserEmail,
-      fechaCreacion: now,
-      fechaActualizacion: now,
-      estado,
-      prioridad,
-      customValues,
-      comentarios: [],
-      historial: [
-        {
-          id: `h-${Date.now()}`,
-          timestamp: now,
-          userEmail: currentUserEmail,
-          action: `Caso registrado con estado inicial "${estado}" y prioridad "${prioridad}".`,
-        },
-      ],
-    };
+      const now = new Date().toISOString();
 
-    onSave(newCaseRecord);
-    onClose();
+      const newCaseRecord: CaseRecord = {
+        id: caseId,
+        titulo: titulo.trim(),
+        creadoPor: currentUserEmail,
+        fechaCreacion: now,
+        fechaActualizacion: now,
+        estado,
+        prioridad,
+        customValues,
+        comentarios: [],
+        historial: [
+          {
+            id: `h-${Date.now()}`,
+            timestamp: now,
+            userEmail: currentUserEmail,
+            action: `Caso registrado con estado inicial "${estado}" y prioridad "${prioridad}".`,
+          },
+        ],
+      };
+
+      await onSave(newCaseRecord);
+      onClose();
+    } catch (err: any) {
+      setSubmitError(err?.message || 'No se pudo registrar el caso. Intenta de nuevo.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -434,21 +463,30 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
             </div>
         )}
 
+          {submitError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 rounded-lg transition-colors cursor-pointer"
+              disabled={isSubmitting}
+              className="px-3.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+              disabled={isSubmitting}
+              className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
               <Check className="w-4 h-4" />
-              <span>Guardar y Registrar Caso</span>
+              <span>{isSubmitting ? 'Guardando...' : 'Guardar y Registrar Caso'}</span>
             </button>
           </div>
         </form>

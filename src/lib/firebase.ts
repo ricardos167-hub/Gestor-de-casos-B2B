@@ -7,7 +7,8 @@ import {
   onSnapshot,
   setDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig } from '../types';
@@ -61,6 +62,20 @@ export function subscribeToCustomFields(callback: (fields: CustomField[]) => voi
   }, (error) => {
     console.error('Error listening to customFields:', error);
   });
+}
+
+// Atomically generates the next sequential case number (RS000001, RS000002, ...)
+// via a Firestore transaction so concurrent case creations never collide.
+export async function getNextCaseId(): Promise<string> {
+  const counterRef = doc(db, 'appSettings', 'caseCounter');
+  const nextNumber = await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(counterRef);
+    const current = snap.exists() ? Number(snap.data().lastNumber) || 0 : 0;
+    const next = current + 1;
+    transaction.set(counterRef, { lastNumber: next }, { merge: true });
+    return next;
+  });
+  return `RS${String(nextNumber).padStart(6, '0')}`;
 }
 
 // Save or Update Case

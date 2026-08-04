@@ -114,8 +114,17 @@ export default function App() {
         (df) => df.isSystem && !fetchedFields.some((f) => f.id === df.id)
       );
 
-      if (missingSystemFields.length > 0) {
-        const merged = [...fetchedFields, ...missingSystemFields].map((item, idx) => ({ ...item, order: idx + 1 }));
+      // One-time label migration: installs seeded before the "id" field was
+      // renamed still have the old label stored in Firestore.
+      const idField = fetchedFields.find((f) => f.id === 'id');
+      const idLabelStale = idField && idField.label === 'Código / ID';
+
+      if (missingSystemFields.length > 0 || idLabelStale) {
+        const merged = [...fetchedFields, ...missingSystemFields].map((item, idx) => ({
+          ...item,
+          ...(item.id === 'id' && idLabelStale ? { label: 'Número de caso' } : {}),
+          order: idx + 1,
+        }));
         setCustomFields(merged);
         saveAllCustomFieldsToFirestore(merged);
       } else {

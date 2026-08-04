@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { CaseRecord, CustomField, CaseComment, HierarchyPresetConfig } from '../types';
 import { HierarchyButtonSelector } from './HierarchyButtonSelector';
+import { confirmTripleDelete } from '../utils/confirmDelete';
 
 interface CaseModalProps {
   caseRecord: CaseRecord | null;
@@ -564,7 +565,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
           {currentUserEmail?.trim().toLowerCase() === 'ricardo.s167@gmail.com' ? (
             <button
               onClick={() => {
-                if (window.confirm(`¿Estás seguro de eliminar el caso ${caseRecord.id}?`)) {
+                if (confirmTripleDelete(`el caso ${caseRecord.id}`)) {
                   onDelete(caseRecord.id);
                   onClose();
                 }

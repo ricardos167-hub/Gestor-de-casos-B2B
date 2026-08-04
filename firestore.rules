@@ -59,6 +59,12 @@ service cloud.firestore {
       allow write: if isValidHierarchyPresets(request.resource.data);
     }
 
+    match /appSettings/caseCounter {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['lastNumber'])
+        && request.resource.data.lastNumber is number;
+    }
+
     // Deny anything outside the known collections/documents above.
     match /{document=**} {
       allow read, write: if false;

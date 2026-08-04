@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { CustomField, FieldType, HierarchyPresetConfig } from '../types';
 import { parseExcelToHierarchy, downloadHierarchyTemplateExcel } from '../utils/excelHierarchyParser';
+import { confirmTripleDelete } from '../utils/confirmDelete';
 import { HierarchyButtonSelector } from './HierarchyButtonSelector';
 
 interface FieldsConfigTabProps {
@@ -368,7 +369,7 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (window.confirm('¿Deseas borrar la estructura jerárquica configurada?')) {
+                  if (confirmTripleDelete('la estructura jerárquica configurada')) {
                     if (onSaveHierarchyConfig) {
                       onSaveHierarchyConfig({ levels: [], tree: [] });
                       setExcelUploadSuccess('Estructura de botones eliminada.');
@@ -776,7 +777,7 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm(`¿Eliminar el campo "${field.label}"?`)) {
+                            if (confirmTripleDelete(`el campo "${field.label}"`)) {
                               onDeleteField(field.id);
                             }
                           }}

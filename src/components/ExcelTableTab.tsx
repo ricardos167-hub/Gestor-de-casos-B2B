@@ -9,8 +9,7 @@ import {
   Check, 
   X, 
   Trash2, 
-  Eye, 
-  CheckSquare, 
+  CheckSquare,
   Square, 
   FileSpreadsheet, 
   Search, 
@@ -20,6 +19,7 @@ import {
   GripVertical
 } from 'lucide-react';
 import { CaseRecord, CustomField, SortConfig } from '../types';
+import { confirmTripleDelete } from '../utils/confirmDelete';
 
 interface ExcelTableTabProps {
   cases: CaseRecord[];
@@ -221,19 +221,13 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
     });
   }, [processedCases]);
 
-  // Start Cell Editing
+  // Start Cell Editing — only "estado" is editable directly from the table;
+  // every other cell click opens the full case detail instead.
   const startEditing = (caseRecord: CaseRecord, fieldId: string) => {
-    if (fieldId === 'id' || fieldId === 'creadoPor' || fieldId === 'fechaCreacion') return; // Readonly fields
-
-    let currentVal: any = '';
-    if (['titulo', 'estado', 'prioridad'].includes(fieldId)) {
-      currentVal = (caseRecord as any)[fieldId];
-    } else {
-      currentVal = caseRecord.customValues ? caseRecord.customValues[fieldId] : '';
-    }
+    if (fieldId !== 'estado') return;
 
     setEditingCell({ caseId: caseRecord.id, fieldId });
-    setEditValue(currentVal !== undefined ? currentVal : '');
+    setEditValue(caseRecord.estado !== undefined ? caseRecord.estado : '');
   };
 
   // Save Cell Edit
@@ -413,7 +407,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
               {currentUserEmail?.trim().toLowerCase() === 'ricardo.s167@gmail.com' && (
                 <button
                   onClick={() => {
-                    if (window.confirm(`¿Eliminar los ${selectedCaseIds.length} casos seleccionados?`)) {
+                    if (confirmTripleDelete(`los ${selectedCaseIds.length} casos seleccionados`)) {
                       onDeleteCases(selectedCaseIds);
                       setSelectedCaseIds([]);
                     }
@@ -507,11 +501,6 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
                   </button>
                 </th>
 
-                {/* Actions column */}
-                <th className="w-12 px-2 py-2.5 text-center border-r border-slate-200 font-semibold text-slate-600">
-                  Ver
-                </th>
-
                 {/* Dynamic Columns */}
                 {activeColumns.map((col) => {
                   const isSorted = sortConfig?.fieldId === col.id;
@@ -581,7 +570,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
             <tbody className="divide-y divide-slate-100 bg-white">
               {processedCases.length === 0 ? (
                 <tr>
-                  <td colSpan={activeColumns.length + 2} className="text-center py-12 text-slate-400">
+                  <td colSpan={activeColumns.length + 1} className="text-center py-12 text-slate-400">
                     <FileSpreadsheet className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="text-xs font-medium">No se encontraron casos con los filtros aplicados.</p>
                   </td>
@@ -611,17 +600,6 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
                         </button>
                       </td>
 
-                      {/* View Action Cell */}
-                      <td className="px-2 py-2 text-center border-r border-slate-100">
-                        <button
-                          onClick={() => onSelectCase(c)}
-                          className="p-1 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                          title="Abrir detalle completo"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-
                       {/* Active Columns Cells */}
                       {activeColumns.map((col) => {
                         const isEditingThisCell =
@@ -634,7 +612,15 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
                         return (
                           <td
                             key={col.id}
-                            onDoubleClick={() => startEditing(c, col.id)}
+                            onClick={() => {
+                              if (isEditingThisCell) return;
+                              if (col.id === 'estado') {
+                                startEditing(c, 'estado');
+                              } else {
+                                onSelectCase(c);
+                              }
+                            }}
+                            title={col.id === 'estado' ? 'Clic para cambiar el estado' : 'Clic para abrir el detalle del caso'}
                             className="px-3 py-2 border-r border-slate-100 relative group cursor-pointer hover:bg-slate-100/50"
                           >
                             {/* Inline Editing Mode */}
@@ -727,15 +713,9 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
                                   </span>
                                 )}
 
-                                {/* Hover Edit Pencil Indicator */}
-                                {col.id !== 'id' && col.id !== 'creadoPor' && col.id !== 'fechaCreacion' && (
-                                  <button
-                                    onClick={() => startEditing(c, col.id)}
-                                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-900 transition-opacity p-0.5"
-                                    title="Doble clic o clic aquí para editar esta celda"
-                                  >
-                                    <Edit2 className="w-3 h-3" />
-                                  </button>
+                                {/* Hover Edit Pencil Indicator — only Estado is editable inline */}
+                                {col.id === 'estado' && (
+                                  <Edit2 className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                                 )}
                               </div>
                             )}
@@ -761,7 +741,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
             )}
           </div>
           <span className="text-slate-400 text-[11px]">
-            Haz doble clic en cualquier celda para editar su valor directamente
+            Clic en Estado para cambiarlo aquí mismo · clic en cualquier otra celda para abrir el detalle del caso
           </span>
         </div>
       </div>
