@@ -68,6 +68,10 @@ export const CaseModal: React.FC<CaseModalProps> = ({
   const [prioridad, setPrioridad] = useState(caseRecord?.prioridad ?? '');
   const [customValues, setCustomValues] = useState<Record<string, any>>({ ...caseRecord?.customValues });
   const [closeError, setCloseError] = useState<string | null>(null);
+  // Tracks the most recent selected path per hierarchy block id during this
+  // editing session (HierarchyButtonSelector keeps its own internal selection
+  // state and doesn't know what was picked in a previous session).
+  const [hierarchySelections, setHierarchySelections] = useState<Record<string, string[]>>({});
 
   // Comment input
   const [newComment, setNewComment] = useState('');
@@ -80,6 +84,18 @@ export const CaseModal: React.FC<CaseModalProps> = ({
   const isClosing = isEditing && estado.trim().toLowerCase() === 'cerrado';
   const isEmptyValue = (val: any) => val === undefined || val === null || val === '' || (typeof val === 'string' && val.trim() === '');
   const tituloBlocksClose = isClosing && tituloField?.requiredToClose && isEmptyValue(titulo);
+
+  // A hierarchy block counts as "complete" if it was fully re-selected this
+  // session, OR (fallback) every level already has a matching custom field
+  // that's filled — so already-completed cases don't force a re-click.
+  const isHierarchyComplete = (hc: HierarchyPresetConfig): boolean => {
+    const selected = hierarchySelections[hc.id];
+    if (selected && selected.length >= hc.levels.length) return true;
+    return hc.levels.every((lvlName) => {
+      const matchedField = customFields.find((f) => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim());
+      return matchedField ? !isEmptyValue(customValues[matchedField.id]) : false;
+    });
+  };
 
   const handleCustomChange = (fieldId: string, value: any) => {
     setCustomValues((prev) => ({
@@ -96,6 +112,9 @@ export const CaseModal: React.FC<CaseModalProps> = ({
       customFields
         .filter((f) => !f.isSystem && f.requiredToClose && isEmptyValue(customValues[f.id]))
         .forEach((f) => missingLabels.push(f.label));
+      hierarchyConfigs
+        .filter((hc) => hc.tree && hc.tree.length > 0 && !hc.hidden && hc.requiredToClose && !isHierarchyComplete(hc))
+        .forEach((hc) => missingLabels.push(hc.name));
 
       if (missingLabels.length > 0) {
         setCloseError(`Completa estos campos obligatorios antes de cerrar el caso: ${missingLabels.join(', ')}.`);
@@ -381,7 +400,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
               {/* Custom Dynamic Fields Display / Editing, agrupados por Área */}
               {(() => {
                 const activeHierarchies = isEditing
-                  ? hierarchyConfigs.filter((hc) => hc.tree && hc.tree.length > 0)
+                  ? hierarchyConfigs.filter((hc) => hc.tree && hc.tree.length > 0 && !hc.hidden)
                   : [];
                 // Fields whose label matches a hierarchy level name are filled in by
                 // the hierarchy selector itself — hide them from the plain fields grid
@@ -393,32 +412,43 @@ export const CaseModal: React.FC<CaseModalProps> = ({
 
                 type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy'; config: HierarchyPresetConfig };
 
-                const renderHierarchyRow = (config: HierarchyPresetConfig) => (
-                  <div key={`__hierarchy_${config.id}__`} className="md:col-span-2">
-                    <HierarchyButtonSelector
-                      config={config}
-                      variant="clean"
-                      onSelectFinalPreset={(selectedPath, titleSuggestion) => {
-                        setTitulo(titleSuggestion);
-                        if (config.levels && config.levels.length > 0) {
-                          const newCustomVals = { ...customValues };
-                          config.levels.forEach((lvlName, idx) => {
-                            if (selectedPath[idx]) {
-                              const matchedField = customFields.find(
-                                f => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
-                              );
-                              if (matchedField) {
-                                newCustomVals[matchedField.id] = selectedPath[idx];
-                              }
+                const renderHierarchyRow = (config: HierarchyPresetConfig) => {
+                  const blocksClose = isClosing && config.requiredToClose && !isHierarchyComplete(config);
+
+                  return (
+                    <div key={`__hierarchy_${config.id}__`} className="md:col-span-2">
+                      {blocksClose && (
+                        <p className="text-rose-600 text-[10px] font-bold mb-1">● {config.name}: obligatorio para cerrar</p>
+                      )}
+                      <div className={blocksClose ? 'rounded-xl ring-2 ring-rose-400' : ''}>
+                        <HierarchyButtonSelector
+                          config={config}
+                          variant="clean"
+                          onSelectFinalPreset={(selectedPath, titleSuggestion) => {
+                            setTitulo(titleSuggestion);
+                            setHierarchySelections((prev) => ({ ...prev, [config.id]: selectedPath }));
+                            if (closeError) setCloseError(null);
+                            if (config.levels && config.levels.length > 0) {
+                              const newCustomVals = { ...customValues };
+                              config.levels.forEach((lvlName, idx) => {
+                                if (selectedPath[idx]) {
+                                  const matchedField = customFields.find(
+                                    f => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
+                                  );
+                                  if (matchedField) {
+                                    newCustomVals[matchedField.id] = selectedPath[idx];
+                                  }
+                                }
+                              });
+                              setCustomValues(newCustomVals);
                             }
-                          });
-                          setCustomValues(newCustomVals);
-                        }
-                      }}
-                      compact
-                    />
-                  </div>
-                );
+                          }}
+                          compact
+                        />
+                      </div>
+                    </div>
+                  );
+                };
 
                 const renderFieldRow = (field: CustomField) => {
                   const value = isEditing ? customValues[field.id] : (caseRecord.customValues ? caseRecord.customValues[field.id] : '');

@@ -166,6 +166,26 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
     );
   };
 
+  const handleToggleHierarchyFlag = (
+    hc: HierarchyPresetConfig,
+    key: 'required' | 'requiredToClose' | 'hidden',
+    value: boolean
+  ) => {
+    onSaveHierarchyConfigs(
+      hierarchyConfigs.map((item) => {
+        if (item.id !== hc.id) return item;
+        const updated = { ...item, [key]: value };
+        // Hiding a block makes required/requiredToClose meaningless — an
+        // admin can't require something the user can never see or fill in.
+        if (key === 'hidden' && value) {
+          updated.required = false;
+          updated.requiredToClose = false;
+        }
+        return updated;
+      })
+    );
+  };
+
   const handleDeleteHierarchyBlock = (hc: HierarchyPresetConfig) => {
     if (!confirmTripleDelete(`el bloque de botones jerárquicos "${hc.name}"`)) return;
     onSaveHierarchyConfigs(hierarchyConfigs.filter((item) => item.id !== hc.id));
@@ -644,6 +664,53 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {/* Flags: Required / Required to close / Hidden */}
+                <div className="flex items-center gap-6 flex-wrap">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(hc.required)}
+                      onChange={(e) => handleToggleHierarchyFlag(hc, 'required', e.target.checked)}
+                      disabled={Boolean(hc.hidden)}
+                      className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300 disabled:opacity-40"
+                    />
+                    <span className={`text-xs font-medium ${hc.hidden ? 'text-slate-400' : 'text-slate-700'}`}>Marcar como requerido</span>
+                  </label>
+
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(hc.requiredToClose)}
+                      onChange={(e) => handleToggleHierarchyFlag(hc, 'requiredToClose', e.target.checked)}
+                      disabled={Boolean(hc.hidden)}
+                      className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300 disabled:opacity-40"
+                    />
+                    <span className={`text-xs font-medium ${hc.hidden ? 'text-slate-400' : 'text-slate-700'}`}>Obligatorio para cerrar el caso</span>
+                  </label>
+
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(hc.hidden)}
+                      onChange={(e) => handleToggleHierarchyFlag(hc, 'hidden', e.target.checked)}
+                      className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 border-slate-300"
+                    />
+                    <span className="text-xs font-medium text-slate-700">Ocultar del formulario de creación</span>
+                  </label>
+                </div>
+
+                {hc.hidden && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Este bloque no aparecerá al crear ni editar un caso, y deja de ser obligatorio automáticamente.
+                  </p>
+                )}
+
+                {hc.requiredToClose && !hc.hidden && (
+                  <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                    Se podrá dejar sin completar mientras el caso está abierto, pero no se podrá cambiar el Estado a "Cerrado" hasta seleccionar todos los niveles.
+                  </p>
+                )}
 
                 {/* Upload Zone */}
                 <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-3.5 text-center flex flex-col items-center justify-center hover:bg-slate-100/60 transition-colors relative">

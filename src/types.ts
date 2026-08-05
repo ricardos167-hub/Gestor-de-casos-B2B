@@ -84,4 +84,7 @@ export interface HierarchyPresetConfig {
   updatedAt?: string;
   order?: number; // Position of the hierarchy button block among the other custom fields
   areaId?: string; // which FieldArea section the hierarchy block renders under
+  required?: boolean; // a full path through all levels must be selected to create a case
+  requiredToClose?: boolean; // can be left incomplete while open, but blocks moving the case to "Cerrado"
+  hidden?: boolean; // hidden block is skipped everywhere (creation form and case detail)
 }
