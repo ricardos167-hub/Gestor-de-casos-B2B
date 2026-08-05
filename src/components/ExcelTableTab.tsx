@@ -14,8 +14,12 @@ import {
   GripVertical,
   Loader2
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { CaseRecord, CustomField, SortConfig } from '../types';
 import { confirmTripleDelete } from '../utils/confirmDelete';
+
+// CaseRecord fields stored as top-level properties rather than inside customValues.
+const SYSTEM_FIELD_IDS = ['id', 'titulo', 'solicitanteEmail', 'estado', 'prioridad', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
 
 interface ExcelTableTabProps {
   cases: CaseRecord[];
@@ -167,7 +171,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
 
       result = result.filter((c) => {
         let val: any = '';
-        if (['id', 'titulo', 'solicitanteEmail', 'estado', 'prioridad', 'creadoPor', 'fechaCreacion'].includes(fieldId)) {
+        if (SYSTEM_FIELD_IDS.includes(fieldId)) {
           val = (c as any)[fieldId];
         } else {
           val = c.customValues[fieldId];
@@ -186,10 +190,10 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
     if (sortConfig) {
       const { fieldId, direction } = sortConfig;
       result.sort((a, b) => {
-        let valA: any = ['id', 'titulo', 'solicitanteEmail', 'estado', 'prioridad', 'creadoPor', 'fechaCreacion'].includes(fieldId)
+        let valA: any = SYSTEM_FIELD_IDS.includes(fieldId)
           ? (a as any)[fieldId]
           : a.customValues[fieldId];
-        let valB: any = ['id', 'titulo', 'solicitanteEmail', 'estado', 'prioridad', 'creadoPor', 'fechaCreacion'].includes(fieldId)
+        let valB: any = SYSTEM_FIELD_IDS.includes(fieldId)
           ? (b as any)[fieldId]
           : b.customValues[fieldId];
 
@@ -246,35 +250,36 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
   };
 
   // Export to CSV
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     const headers = visibleColumnIds.map((id) => {
       const col = allColumns.find((c) => c.id === id);
-      return `"${col ? col.label : id}"`;
+      return col ? col.label : id;
     });
 
     const rows = processedCases.map((c) => {
-      return visibleColumnIds
-        .map((id) => {
-          let val: any = '';
-          if (['id', 'titulo', 'estado', 'prioridad', 'creadoPor', 'fechaCreacion'].includes(id)) {
-            val = (c as any)[id];
-          } else {
-            val = c.customValues[id];
-          }
-          if (val === undefined || val === null) val = '';
-          return `"${String(val).replace(/"/g, '""')}"`;
-        })
-        .join(',');
+      return visibleColumnIds.map((id) => {
+        const col = allColumns.find((col) => col.id === id);
+        let val: any = SYSTEM_FIELD_IDS.includes(id) ? (c as any)[id] : c.customValues[id];
+
+        if (val === undefined || val === null || val === '') return '';
+
+        // Write real Date objects for date columns (with cellDates below) so
+        // Excel treats them as dates \u2014 sortable/filterable \u2014 not plain text.
+        if (col?.type === 'date' || id === 'fechaCreacion' || id === 'fechaActualizacion') {
+          const d = new Date(val);
+          if (!isNaN(d.getTime())) return d;
+        }
+
+        if (col?.type === 'checkbox') return val ? 'S\u00ED' : 'No';
+
+        return val;
+      });
     });
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `casos_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows], { cellDates: true, dateNF: 'dd/mm/yyyy hh:mm' });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Casos');
+    XLSX.writeFile(workbook, `casos_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   // Bulk Status Update
@@ -454,13 +459,13 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
             )}
           </div>
 
-          {/* Export to CSV */}
+          {/* Export to Excel */}
           <button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Exportar Excel (CSV)</span>
+            <span>Exportar Excel (.xlsx)</span>
           </button>
         </div>
       </div>
@@ -595,7 +600,7 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
 
                       {/* Active Columns Cells — clicking any cell opens the case detail */}
                       {activeColumns.map((col) => {
-                        let rawValue: any = ['id', 'titulo', 'solicitanteEmail', 'estado', 'prioridad', 'creadoPor', 'fechaCreacion'].includes(col.id)
+                        let rawValue: any = SYSTEM_FIELD_IDS.includes(col.id)
                           ? (c as any)[col.id]
                           : c.customValues[col.id];
 

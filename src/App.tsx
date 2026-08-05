@@ -267,12 +267,15 @@ export default function App() {
     const q = searchQuery.toLowerCase().trim();
     if (c.id.toLowerCase().includes(q)) return true;
     if (c.titulo.toLowerCase().includes(q)) return true;
-    if (c.solicitanteEmail.toLowerCase().includes(q)) return true;
+    if ((c.solicitanteEmail || '').toLowerCase().includes(q)) return true;
     if (c.estado.toLowerCase().includes(q)) return true;
     if (c.prioridad.toLowerCase().includes(q)) return true;
+    if ((c.creadoPor || '').toLowerCase().includes(q)) return true;
+    // Search inside comments
+    if (c.comentarios?.some((comment) => comment.text.toLowerCase().includes(q))) return true;
     // Search inside custom field values
-    return Object.values(c.customValues).some((val) =>
-      String(val || '').toLowerCase().includes(q)
+    return Object.values(c.customValues || {}).some((val) =>
+      String(val ?? '').toLowerCase().includes(q)
     );
   });
 
