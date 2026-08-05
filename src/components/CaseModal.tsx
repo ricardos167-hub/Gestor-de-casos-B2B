@@ -387,6 +387,11 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                 // Default the hierarchy block before other fields until an admin
                 // explicitly repositions it via the Fields Config drag-and-drop.
                 const hierarchyOrder = hierarchyConfig?.order ?? -1;
+                // Fields whose label matches a hierarchy level name are filled in by
+                // the hierarchy selector itself — hide them from the plain fields grid
+                // so they don't appear twice and risk the hierarchy selector silently
+                // overwriting an edit made directly on the "duplicate" field.
+                const hierarchyLevelLabels = new Set((hierarchyConfig?.levels || []).map((l) => l.toLowerCase().trim()));
 
                 type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
 
@@ -521,6 +526,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                     const fieldRows: Row[] = customFields
                       .filter((f) => !f.isSystem && !f.hidden)
                       .filter((f) => (f.areaId || defaultAreaId) === area.id)
+                      .filter((f) => !hierarchyLevelLabels.has(f.label.toLowerCase().trim()))
                       .map((field) => ({ kind: 'field' as const, field }));
 
                     const rows: Row[] = [

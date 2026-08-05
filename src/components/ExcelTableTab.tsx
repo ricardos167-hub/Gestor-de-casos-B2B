@@ -251,14 +251,15 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
 
   // Export to CSV
   const handleExportExcel = () => {
-    const headers = visibleColumnIds.map((id) => {
-      const col = allColumns.find((c) => c.id === id);
-      return col ? col.label : id;
-    });
+    // Export exactly the columns currently shown in the table (activeColumns
+    // already excludes hidden fields) — visibleColumnIds alone can still
+    // contain a field's id after it was hidden, since the column picker only
+    // ever lists non-hidden columns and can't be used to remove it from there.
+    const headers = activeColumns.map((col) => col.label);
 
     const rows = processedCases.map((c) => {
-      return visibleColumnIds.map((id) => {
-        const col = allColumns.find((col) => col.id === id);
+      return activeColumns.map((col) => {
+        const id = col.id;
         let val: any = SYSTEM_FIELD_IDS.includes(id) ? (c as any)[id] : c.customValues[id];
 
         if (val === undefined || val === null || val === '') return '';
