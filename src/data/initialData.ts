@@ -152,7 +152,7 @@ export const DEFAULT_FIELDS: CustomField[] = [
     id: 'programa',
     label: 'Programa',
     type: 'select',
-    options: ['Técnica Móvil', 'Técnica Fija', 'Otros'],
+    options: ['Técnica Móvil', 'Técnica Fija', 'Retenciones Fija', 'Retenciones Moviles', 'Otros'],
     required: true,
     showInTable: true,
     isSystem: false,

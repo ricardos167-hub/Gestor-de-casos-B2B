@@ -16,7 +16,7 @@ interface LoginModalProps {
 }
 
 const ORIGEN_OPTIONS = ['Call', 'Whatsapp', 'Otros'];
-const PROGRAMA_OPTIONS = ['Técnica Móvil', 'Técnica Fija', 'Otros'];
+const PROGRAMA_OPTIONS = ['Técnica Móvil', 'Técnica Fija', 'Retenciones Fija', 'Retenciones Moviles', 'Otros'];
 
 function getStoredProfile(email: string): UserProfile | null {
   try {
