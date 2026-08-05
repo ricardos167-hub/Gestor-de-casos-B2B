@@ -628,8 +628,8 @@ export const CaseModal: React.FC<CaseModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between">
-          {currentUserEmail?.trim().toLowerCase() === 'ricardo.s167@gmail.com' ? (
+        {currentUserEmail?.trim().toLowerCase() === 'ricardo.s167@gmail.com' && (
+          <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center">
             <button
               onClick={() => {
                 if (confirmTripleDelete(`el caso ${caseRecord.id}`)) {
@@ -642,17 +642,8 @@ export const CaseModal: React.FC<CaseModalProps> = ({
               <Trash2 className="w-3.5 h-3.5" />
               <span>Eliminar Caso</span>
             </button>
-          ) : (
-            <div />
-          )}
-
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
-          >
-            Cerrar
-          </button>
-        </div>
+          </div>
+        )}
 
       </div>
     </div>
