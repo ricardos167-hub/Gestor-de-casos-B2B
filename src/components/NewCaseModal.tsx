@@ -11,7 +11,7 @@ interface NewCaseModalProps {
   onSave: (newCase: CaseRecord) => void;
   customFields: CustomField[];
   currentUserEmail: string;
-  hierarchyConfig?: HierarchyPresetConfig | null;
+  hierarchyConfigs: HierarchyPresetConfig[];
   userProfile?: { origen: string; programa: string } | null;
   fieldAreas: FieldArea[];
 }
@@ -22,7 +22,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
   onSave,
   customFields,
   currentUserEmail,
-  hierarchyConfig,
+  hierarchyConfigs,
   userProfile,
   fieldAreas,
 }) => {
@@ -304,19 +304,17 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
 
           {/* Section 2: Campos personalizados, agrupados por Área */}
           {(() => {
-            const hasHierarchy = Boolean(hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0);
-            const hierarchyAreaId = hierarchyConfig?.areaId || defaultAreaId;
-            // Default the hierarchy block before other fields until an admin
-            // explicitly repositions it via the Fields Config drag-and-drop.
-            const hierarchyOrder = hierarchyConfig?.order ?? -1;
-            const hierarchyLevelLabels = new Set((hierarchyConfig?.levels || []).map((l) => l.toLowerCase().trim()));
+            const activeHierarchies = hierarchyConfigs.filter((hc) => hc.tree && hc.tree.length > 0);
+            const hierarchyLevelLabels = new Set(
+              activeHierarchies.flatMap((hc) => hc.levels.map((l) => l.toLowerCase().trim()))
+            );
 
-            type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
+            type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy'; config: HierarchyPresetConfig };
 
-            const renderHierarchyRow = () => (
-              <div key="__hierarchy__" className="md:col-span-2">
+            const renderHierarchyRow = (config: HierarchyPresetConfig) => (
+              <div key={`__hierarchy_${config.id}__`} className="md:col-span-2">
                 <HierarchyButtonSelector
-                  config={hierarchyConfig!}
+                  config={config}
                   variant="clean"
                   onSelectFinalPreset={(selectedPath, titleSuggestion) => {
                     if (!titulo) {
@@ -331,9 +329,9 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                     }
 
                     // Auto-fill matching custom fields
-                    if (hierarchyConfig!.levels && hierarchyConfig!.levels.length > 0) {
+                    if (config.levels && config.levels.length > 0) {
                       const newCustomVals = { ...customValues };
-                      hierarchyConfig!.levels.forEach((lvlName, idx) => {
+                      config.levels.forEach((lvlName, idx) => {
                         if (selectedPath[idx]) {
                           const matchedField = customFields.find(
                             (f) => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
@@ -466,12 +464,13 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                   .filter((f) => !hierarchyLevelLabels.has(f.label.toLowerCase().trim()))
                   .map((field) => ({ kind: 'field' as const, field }));
 
-                const rows: Row[] = [
-                  ...fieldRows,
-                  ...(hasHierarchy && hierarchyAreaId === area.id ? [{ kind: 'hierarchy' as const }] : []),
-                ].sort((a, b) => {
-                  const orderA = a.kind === 'field' ? a.field.order : hierarchyOrder;
-                  const orderB = b.kind === 'field' ? b.field.order : hierarchyOrder;
+                const hierarchyRows: Row[] = activeHierarchies
+                  .filter((hc) => (hc.areaId || defaultAreaId) === area.id)
+                  .map((config) => ({ kind: 'hierarchy' as const, config }));
+
+                const rows: Row[] = [...fieldRows, ...hierarchyRows].sort((a, b) => {
+                  const orderA = a.kind === 'field' ? a.field.order : (a.config.order ?? -1);
+                  const orderB = b.kind === 'field' ? b.field.order : (b.config.order ?? -1);
                   return orderA - orderB;
                 });
 
@@ -490,7 +489,7 @@ export const NewCaseModal: React.FC<NewCaseModalProps> = ({
                       {area.label}
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {rows.map((row) => (row.kind === 'hierarchy' ? renderHierarchyRow() : renderFieldRow(row.field)))}
+                      {rows.map((row) => (row.kind === 'hierarchy' ? renderHierarchyRow(row.config) : renderFieldRow(row.field)))}
                     </div>
                   </div>
                 ))}

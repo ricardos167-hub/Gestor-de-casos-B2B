@@ -38,8 +38,8 @@ interface FieldsConfigTabProps {
   onUpdateField: (updatedField: CustomField) => void;
   onDeleteField: (fieldId: string) => void;
   onReorderFields: (newOrderedFields: CustomField[]) => void;
-  hierarchyConfig?: HierarchyPresetConfig | null;
-  onSaveHierarchyConfig?: (config: HierarchyPresetConfig) => void;
+  hierarchyConfigs: HierarchyPresetConfig[];
+  onSaveHierarchyConfigs: (configs: HierarchyPresetConfig[]) => void;
   fieldAreas: FieldArea[];
   onSaveFieldAreas: (areas: FieldArea[]) => void;
 }
@@ -50,8 +50,8 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
   onUpdateField,
   onDeleteField,
   onReorderFields,
-  hierarchyConfig,
-  onSaveHierarchyConfig,
+  hierarchyConfigs,
+  onSaveHierarchyConfigs,
   fieldAreas,
   onSaveFieldAreas,
 }) => {
@@ -112,11 +112,66 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
     setEditingAreaId(null);
   };
 
-  // Excel Hierarchy Upload State
+  // Hierarchy Button Blocks management state (multiple independent blocks)
+  const sortedHierarchyConfigs = [...hierarchyConfigs].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const [isAddingHierarchy, setIsAddingHierarchy] = useState(false);
+  const [newHierarchyName, setNewHierarchyName] = useState('');
+  const [editingHierarchyId, setEditingHierarchyId] = useState<string | null>(null);
+  const [editHierarchyName, setEditHierarchyName] = useState('');
   const [excelUploadError, setExcelUploadError] = useState<string | null>(null);
   const [excelUploadSuccess, setExcelUploadSuccess] = useState<string | null>(null);
 
-  const handleExcelFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCreateHierarchyBlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHierarchyName.trim()) return;
+    const id = newHierarchyName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_') + '_' + Math.floor(Math.random() * 1000);
+    const maxOrder = [
+      ...customFields.map((f) => f.order),
+      ...hierarchyConfigs.map((h) => h.order ?? 0),
+    ].reduce((max, v) => Math.max(max, v), 0);
+
+    const newBlock: HierarchyPresetConfig = {
+      id,
+      name: newHierarchyName.trim(),
+      levels: [],
+      tree: [],
+      order: maxOrder + 1,
+      areaId: defaultAreaId,
+    };
+    onSaveHierarchyConfigs([...hierarchyConfigs, newBlock]);
+    setNewHierarchyName('');
+    setIsAddingHierarchy(false);
+  };
+
+  const startEditHierarchyName = (hc: HierarchyPresetConfig) => {
+    setEditingHierarchyId(hc.id);
+    setEditHierarchyName(hc.name);
+  };
+
+  const handleSaveHierarchyName = (hc: HierarchyPresetConfig) => {
+    if (!editHierarchyName.trim()) return;
+    onSaveHierarchyConfigs(
+      hierarchyConfigs.map((item) => (item.id === hc.id ? { ...item, name: editHierarchyName.trim() } : item))
+    );
+    setEditingHierarchyId(null);
+  };
+
+  const handleChangeHierarchyArea = (hc: HierarchyPresetConfig, areaId: string) => {
+    onSaveHierarchyConfigs(
+      hierarchyConfigs.map((item) => (item.id === hc.id ? { ...item, areaId } : item))
+    );
+  };
+
+  const handleDeleteHierarchyBlock = (hc: HierarchyPresetConfig) => {
+    if (!confirmTripleDelete(`el bloque de botones jerárquicos "${hc.name}"`)) return;
+    onSaveHierarchyConfigs(hierarchyConfigs.filter((item) => item.id !== hc.id));
+  };
+
+  const handleExcelFileUpload = (hierarchyId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -127,11 +182,15 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
     reader.onload = (evt) => {
       try {
         const buffer = evt.target?.result as ArrayBuffer;
-        const parsedConfig = parseExcelToHierarchy(buffer);
-        if (onSaveHierarchyConfig) {
-          onSaveHierarchyConfig(parsedConfig);
-          setExcelUploadSuccess(`¡Éxito! Se importaron ${parsedConfig.levels.length} niveles jerárquicos y ${parsedConfig.tree.length} categorías principales desde "${file.name}".`);
-        }
+        const parsed = parseExcelToHierarchy(buffer);
+        onSaveHierarchyConfigs(
+          hierarchyConfigs.map((item) =>
+            item.id === hierarchyId
+              ? { ...item, levels: parsed.levels, tree: parsed.tree, updatedAt: parsed.updatedAt }
+              : item
+          )
+        );
+        setExcelUploadSuccess(`¡Éxito! Se importaron ${parsed.levels.length} niveles jerárquicos y ${parsed.tree.length} categorías principales desde "${file.name}".`);
       } catch (err: any) {
         setExcelUploadError(err.message || 'Error al procesar el archivo Excel.');
       }
@@ -232,36 +291,39 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
     setEditingFieldId(null);
   };
 
-  // Combined, orderable list: regular custom fields + a pseudo-row for the
-  // hierarchy button block (when configured), so the hierarchy block's
-  // position among the other fields can be dragged like any other field.
-  type FieldRow = { kind: 'field'; field: CustomField } | { kind: 'hierarchy' };
+  // Combined, orderable list: regular custom fields + a pseudo-row for each
+  // active hierarchy button block, so their position among the other fields
+  // can be dragged like any other field.
+  type FieldRow = { kind: 'field'; field: CustomField } | { kind: 'hierarchy'; config: HierarchyPresetConfig };
 
-  const hasHierarchy = Boolean(hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0);
-  const hierarchyOrder = hierarchyConfig?.order ?? (customFields.length + 1);
+  const activeHierarchies = hierarchyConfigs.filter((hc) => hc.tree && hc.tree.length > 0);
 
   const combinedRows: FieldRow[] = [
     ...customFields.map((field): FieldRow => ({ kind: 'field', field })),
-    ...(hasHierarchy ? [{ kind: 'hierarchy' as const }] : []),
+    ...activeHierarchies.map((config): FieldRow => ({ kind: 'hierarchy', config })),
   ].sort((a, b) => {
-    const orderA = a.kind === 'field' ? a.field.order : hierarchyOrder;
-    const orderB = b.kind === 'field' ? b.field.order : hierarchyOrder;
+    const orderA = a.kind === 'field' ? a.field.order : (a.config.order ?? customFields.length + 1);
+    const orderB = b.kind === 'field' ? b.field.order : (b.config.order ?? customFields.length + 1);
     return orderA - orderB;
   });
 
   const applyRowOrder = (rows: FieldRow[]) => {
     const updatedFields: CustomField[] = [];
-    let newHierarchyOrder = hierarchyOrder;
+    const newHierarchyOrders: Record<string, number> = {};
     rows.forEach((row, idx) => {
       if (row.kind === 'field') {
         updatedFields.push({ ...row.field, order: idx + 1 });
       } else {
-        newHierarchyOrder = idx + 1;
+        newHierarchyOrders[row.config.id] = idx + 1;
       }
     });
     onReorderFields(updatedFields);
-    if (hasHierarchy && hierarchyConfig && onSaveHierarchyConfig) {
-      onSaveHierarchyConfig({ ...hierarchyConfig, order: newHierarchyOrder });
+    if (Object.keys(newHierarchyOrders).length > 0) {
+      onSaveHierarchyConfigs(
+        hierarchyConfigs.map((hc) =>
+          newHierarchyOrders[hc.id] !== undefined ? { ...hc, order: newHierarchyOrders[hc.id] } : hc
+        )
+      );
     }
   };
 
@@ -438,7 +500,7 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
         </div>
       </div>
 
-      {/* SECTION: EXCEL HIERARCHICAL BUTTONS CONFIGURATION */}
+      {/* SECTION: HIERARCHY BUTTON BLOCKS (multiple independent blocks) */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
@@ -446,63 +508,59 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span>Botones Jerárquicos Preestablecidos (Carga desde Excel)</span>
-                {hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0 && (
-                  <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
-                    Activo ({hierarchyConfig.levels.length} Niveles)
-                  </span>
-                )}
-              </h3>
+              <h3 className="text-sm font-bold text-slate-900">Botones Jerárquicos Preestablecidos (Carga desde Excel)</h3>
               <p className="text-xs text-slate-500">
-                Cada columna de tu Excel representa un nivel jerárquico (Columna 1 = Nivel 1, Columna 2 = Nivel 2, Columna 3 = Nivel 3...).
+                Puedes crear varios bloques independientes (ej. uno para "Categoría de Incidencia" y otro para "Tipo de Solicitud"), cada uno con su propio nombre y su propio Excel.
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={downloadHierarchyTemplateExcel}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Descargar Plantilla Excel</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={downloadHierarchyTemplateExcel}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Plantilla Excel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddingHierarchy(!isAddingHierarchy)}
+              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Botones Jerárquicos</span>
+            </button>
+          </div>
         </div>
 
-        {/* Upload Zone */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-4 text-center flex flex-col items-center justify-center hover:bg-slate-100/60 transition-colors relative">
+        {isAddingHierarchy && (
+          <form onSubmit={handleCreateHierarchyBlock} className="flex items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
             <input
-              type="file"
-              accept=".xlsx, .xls, .csv"
-              onChange={handleExcelFileUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              title="Haz clic para seleccionar un archivo Excel o CSV"
+              type="text"
+              autoFocus
+              placeholder='ej: "Categoría de Incidencia", "Tipo de Solicitud"'
+              value={newHierarchyName}
+              onChange={(e) => setNewHierarchyName(e.target.value)}
+              className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 bg-white"
             />
-            <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-2">
-              <Upload className="w-5 h-5" />
-            </div>
-            <p className="text-xs font-bold text-slate-800">
-              Haz clic o arrastra tu archivo Excel (.xlsx, .csv) aquí
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Genera automáticamente los botones interactivos por cada columna
-            </p>
-          </div>
-
-          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 text-xs text-amber-900 space-y-2">
-            <div className="font-bold flex items-center gap-1.5 text-amber-950">
-              <Layers className="w-4 h-4 text-amber-600" />
-              <span>¿Cómo estructurar tu Excel?</span>
-            </div>
-            <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-900/90">
-              <li><strong>Fila 1 (Encabezados):</strong> Nombres de los niveles (ej. <em>Categoría, Subcategoría, Incidencia</em>).</li>
-              <li><strong>Filas siguientes:</strong> Las combinaciones válidas de opciones.</li>
-              <li>Al subir el archivo, el sistema crea los botones dinámicos al crear o editar casos.</li>
-            </ul>
-          </div>
-        </div>
+            <button
+              type="submit"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg cursor-pointer flex items-center gap-1"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Crear</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsAddingHierarchy(false); setNewHierarchyName(''); }}
+              className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </form>
+        )}
 
         {/* Feedback Messages */}
         {excelUploadError && (
@@ -519,35 +577,124 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
           </div>
         )}
 
-        {/* Preview of Configured Hierarchy Buttons */}
-        {hierarchyConfig && hierarchyConfig.tree && hierarchyConfig.tree.length > 0 && (
-          <div className="pt-2">
-            <h4 className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
-              <span>Vista Previa Interactiva de los Botones Generados:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirmTripleDelete('la estructura jerárquica configurada')) {
-                    if (onSaveHierarchyConfig) {
-                      onSaveHierarchyConfig({ levels: [], tree: [] });
-                      setExcelUploadSuccess('Estructura de botones eliminada.');
-                    }
-                  }
-                }}
-                className="text-[11px] text-rose-600 hover:text-rose-700 font-medium hover:underline cursor-pointer"
-              >
-                Eliminar Botones Jerárquicos
-              </button>
-            </h4>
-            <HierarchyButtonSelector
-              config={hierarchyConfig}
-              onSelectFinalPreset={(path, suggestion) => {
-                alert(`Botón seleccionado: "${suggestion}"\nRuta seleccionada: ${path.join(' > ')}`);
-              }}
-              compact
-            />
-          </div>
+        {sortedHierarchyConfigs.length === 0 && !isAddingHierarchy && (
+          <p className="text-xs text-slate-400 italic py-2">
+            Aún no has creado ningún bloque de botones jerárquicos. Usa "Botones Jerárquicos" arriba para crear el primero.
+          </p>
         )}
+
+        <div className="space-y-4">
+          {sortedHierarchyConfigs.map((hc) => {
+            const isActive = Boolean(hc.tree && hc.tree.length > 0);
+            const isEditingName = editingHierarchyId === hc.id;
+
+            return (
+              <div key={hc.id} className="border border-slate-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+                    {isEditingName ? (
+                      <>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editHierarchyName}
+                          onChange={(e) => setEditHierarchyName(e.target.value)}
+                          className="flex-1 px-2 py-1 rounded border border-slate-300 text-xs bg-white outline-none focus:border-slate-900"
+                        />
+                        <button type="button" onClick={() => handleSaveHierarchyName(hc)} className="text-emerald-700 hover:text-emerald-800 p-1 cursor-pointer" title="Guardar">
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => setEditingHierarchyId(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer" title="Cancelar">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xs font-bold text-slate-900">{hc.name}</span>
+                        {isActive && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                            Activo ({hc.levels.length} Niveles)
+                          </span>
+                        )}
+                        <button type="button" onClick={() => startEditHierarchyName(hc)} className="text-slate-400 hover:text-slate-800 p-1 cursor-pointer" title="Renombrar bloque">
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      value={hc.areaId || defaultAreaId}
+                      onChange={(e) => handleChangeHierarchyArea(hc, e.target.value)}
+                      className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-medium bg-white outline-none focus:border-slate-900"
+                      title="Área del formulario"
+                    >
+                      {sortedAreas.map((area) => (
+                        <option key={area.id} value={area.id}>{area.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHierarchyBlock(hc)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Eliminar bloque"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Upload Zone */}
+                <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-3.5 text-center flex flex-col items-center justify-center hover:bg-slate-100/60 transition-colors relative">
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={(e) => handleExcelFileUpload(hc.id, e)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    title="Haz clic para seleccionar un archivo Excel o CSV"
+                  />
+                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-1.5">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-800">
+                    {isActive ? 'Reemplazar datos (sube otro Excel)' : 'Haz clic o arrastra tu Excel (.xlsx, .csv) aquí'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Columna 1 = Nivel 1, Columna 2 = Nivel 2, etc.
+                  </p>
+                </div>
+
+                {isActive && (
+                  <div>
+                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Vista Previa Interactiva:
+                    </h4>
+                    <HierarchyButtonSelector
+                      config={hc}
+                      onSelectFinalPreset={(path, suggestion) => {
+                        alert(`Botón seleccionado: "${suggestion}"\nRuta seleccionada: ${path.join(' > ')}`);
+                      }}
+                      compact
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 text-xs text-amber-900 space-y-2">
+          <div className="font-bold flex items-center gap-1.5 text-amber-950">
+            <Layers className="w-4 h-4 text-amber-600" />
+            <span>¿Cómo estructurar tu Excel?</span>
+          </div>
+          <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-900/90">
+            <li><strong>Fila 1 (Encabezados):</strong> Nombres de los niveles (ej. <em>Categoría, Subcategoría, Incidencia</em>).</li>
+            <li><strong>Filas siguientes:</strong> Las combinaciones válidas de opciones.</li>
+            <li>Al subir el archivo, el sistema crea los botones dinámicos al crear o editar casos.</li>
+          </ul>
+        </div>
       </div>
 
       {/* New Field Creator Card */}
@@ -767,7 +914,7 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
             if (row.kind === 'hierarchy') {
               return (
                 <div
-                  key="__hierarchy__"
+                  key={`__hierarchy_${row.config.id}__`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, idx)}
                   onDragOver={(e) => handleDragOver(e, idx)}
@@ -781,13 +928,13 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
                     {dragHandleAndArrows(false)}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-xs text-slate-900">Botones Jerárquicos (Excel)</span>
+                        <span className="font-semibold text-xs text-slate-900">{row.config.name}</span>
                         <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
                           <Layers className="w-3 h-3" /> Bloque Jerárquico
                         </span>
                       </div>
                       <div className="text-xs text-slate-400 mt-1">
-                        Define en qué posición aparece el selector de botones en cascada al crear o editar un caso.
+                        Define en qué posición aparece este bloque de botones en cascada al crear o editar un caso.
                       </div>
                     </div>
                   </div>

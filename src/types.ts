@@ -77,6 +77,8 @@ export interface HierarchyNode {
 }
 
 export interface HierarchyPresetConfig {
+  id: string; // stable identifier for this hierarchy block (multiple can coexist)
+  name: string; // admin-editable label to tell blocks apart, e.g. "Categoría de Incidencia"
   levels: string[]; // Column names e.g. ["Categoría", "Subcategoría", "Tipo de Solicitud"]
   tree: HierarchyNode[];
   updatedAt?: string;

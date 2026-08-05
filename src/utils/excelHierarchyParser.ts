@@ -1,7 +1,11 @@
 import * as XLSX from 'xlsx';
 import { HierarchyNode, HierarchyPresetConfig } from '../types';
 
-export function parseExcelToHierarchy(fileBuffer: ArrayBuffer): HierarchyPresetConfig {
+// The parsed Excel data only produces the tree/levels; id/name/order/areaId
+// belong to whichever hierarchy block the caller merges this data into.
+export type ParsedHierarchyData = Pick<HierarchyPresetConfig, 'levels' | 'tree' | 'updatedAt'>;
+
+export function parseExcelToHierarchy(fileBuffer: ArrayBuffer): ParsedHierarchyData {
   const workbook = XLSX.read(fileBuffer, { type: 'array' });
   const firstSheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[firstSheetName];

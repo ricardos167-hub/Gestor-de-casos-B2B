@@ -175,21 +175,41 @@ export async function saveFieldAreasToFirestore(areas: FieldArea[]) {
   await setDoc(docRef, { areas });
 }
 
-// Hierarchy Preset Config (Buttons generated from Excel)
-export function subscribeToHierarchyPresets(callback: (config: HierarchyPresetConfig | null) => void) {
+// Hierarchy Preset Configs (multiple independent "Botones Jerárquicos" blocks,
+// each generated from its own Excel upload)
+export function subscribeToHierarchyPresets(callback: (configs: HierarchyPresetConfig[]) => void) {
   const docRef = doc(db, 'appSettings', 'hierarchyPresets');
   return onSnapshot(docRef, (docSnap) => {
-    if (docSnap.exists()) {
-      callback(docSnap.data() as HierarchyPresetConfig);
+    if (!docSnap.exists()) {
+      callback([]);
+      return;
+    }
+    const data = docSnap.data();
+    if (Array.isArray(data.items)) {
+      callback(data.items as HierarchyPresetConfig[]);
+    } else if (Array.isArray(data.levels)) {
+      // Legacy shape from before multi-block support: a single config stored
+      // directly on the document. Migrate it into the new items[] shape once.
+      const migrated: HierarchyPresetConfig = {
+        id: 'legacy',
+        name: 'Botones Jerárquicos',
+        levels: data.levels,
+        tree: data.tree || [],
+        updatedAt: data.updatedAt,
+        order: data.order,
+        areaId: data.areaId,
+      };
+      callback([migrated]);
+      setDoc(docRef, { items: [migrated] });
     } else {
-      callback(null);
+      callback([]);
     }
   }, (error) => {
     console.error('Error listening to hierarchyPresets:', error);
   });
 }
 
-export async function saveHierarchyPresetsToFirestore(config: HierarchyPresetConfig) {
+export async function saveHierarchyPresetsToFirestore(configs: HierarchyPresetConfig[]) {
   const docRef = doc(db, 'appSettings', 'hierarchyPresets');
-  await setDoc(docRef, config);
+  await setDoc(docRef, { items: configs });
 }

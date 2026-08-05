@@ -73,8 +73,8 @@ export default function App() {
     appSubtitle: 'Ticketera con campos personalizables y vista editable',
   });
 
-  // Hierarchy Buttons Presets State (Loaded from Excel)
-  const [hierarchyConfig, setHierarchyConfig] = useState<HierarchyPresetConfig | null>(null);
+  // Hierarchy Buttons Presets State (Loaded from Excel) — multiple independent blocks
+  const [hierarchyConfigs, setHierarchyConfigs] = useState<HierarchyPresetConfig[]>([]);
 
   // Field Areas: editable section headings that group custom fields on the forms
   const [fieldAreas, setFieldAreas] = useState<FieldArea[]>(DEFAULT_FIELD_AREAS);
@@ -152,8 +152,8 @@ export default function App() {
       }
     });
 
-    const unsubscribeHierarchy = subscribeToHierarchyPresets((fetchedHierarchy) => {
-      setHierarchyConfig(fetchedHierarchy);
+    const unsubscribeHierarchy = subscribeToHierarchyPresets((fetchedConfigs) => {
+      setHierarchyConfigs(fetchedConfigs);
     });
 
     const unsubscribeFieldAreas = subscribeToFieldAreas((fetchedAreas) => {
@@ -284,9 +284,9 @@ export default function App() {
     saveAppSettingsToFirestore(newSettings);
   };
 
-  const handleSaveHierarchyConfig = (newConfig: HierarchyPresetConfig) => {
-    setHierarchyConfig(newConfig);
-    saveHierarchyPresetsToFirestore(newConfig);
+  const handleSaveHierarchyConfigs = (newConfigs: HierarchyPresetConfig[]) => {
+    setHierarchyConfigs(newConfigs);
+    saveHierarchyPresetsToFirestore(newConfigs);
   };
 
   const handleSaveFieldAreas = async (newAreas: FieldArea[]) => {
@@ -345,8 +345,8 @@ export default function App() {
             onUpdateField={handleUpdateField}
             onDeleteField={handleDeleteField}
             onReorderFields={handleReorderFields}
-            hierarchyConfig={hierarchyConfig}
-            onSaveHierarchyConfig={handleSaveHierarchyConfig}
+            hierarchyConfigs={hierarchyConfigs}
+            onSaveHierarchyConfigs={handleSaveHierarchyConfigs}
             fieldAreas={fieldAreas}
             onSaveFieldAreas={handleSaveFieldAreas}
           />
@@ -369,7 +369,7 @@ export default function App() {
         onSave={handleSaveNewCase}
         customFields={customFields}
         currentUserEmail={currentUserEmail || 'invitado@empresa.com'}
-        hierarchyConfig={hierarchyConfig}
+        hierarchyConfigs={hierarchyConfigs}
         userProfile={currentUserProfile}
         fieldAreas={fieldAreas}
       />
@@ -383,7 +383,7 @@ export default function App() {
         onDelete={handleDeleteSingleCase}
         customFields={customFields}
         currentUserEmail={currentUserEmail || 'invitado@empresa.com'}
-        hierarchyConfig={hierarchyConfig}
+        hierarchyConfigs={hierarchyConfigs}
         fieldAreas={fieldAreas}
       />
 

@@ -32,9 +32,8 @@ service cloud.firestore {
     }
 
     function isValidHierarchyPresets(data) {
-      return data.keys().hasAll(['levels', 'tree'])
-        && data.levels is list
-        && data.tree is list;
+      return data.keys().hasAll(['items'])
+        && data.items is list;
     }
 
     match /cases/{caseId} {
