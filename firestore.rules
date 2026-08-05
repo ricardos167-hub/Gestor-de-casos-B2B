@@ -36,6 +36,15 @@ service cloud.firestore {
         && data.items is list;
     }
 
+    function isValidAppUser(data) {
+      return data.keys().hasAll(['email', 'passwordHash', 'role', 'createdAt', 'createdBy'])
+        && data.email is string && data.email.size() < 300
+        && data.passwordHash is string && data.passwordHash.size() == 64
+        && data.role in ['admin', 'agent']
+        && data.createdAt is string
+        && data.createdBy is string;
+    }
+
     match /cases/{caseId} {
       allow read: if true;
       allow create, update: if isValidCase(request.resource.data);
@@ -68,6 +77,18 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.resource.data.keys().hasAll(['areas'])
         && request.resource.data.areas is list;
+    }
+
+    // NOTE: same trust model as the rest of this file — there is no Firebase
+    // Auth wiring, so these rules validate document *shape*, not *who* is
+    // writing. Password hashes stored here are only as safe as keeping the
+    // Firebase config out of untrusted hands, which it currently is not
+    // (it ships in the client bundle). Real access control would require
+    // Firebase Authentication + request.auth-based rules.
+    match /appUsers/{userId} {
+      allow read: if true;
+      allow create, update: if isValidAppUser(request.resource.data);
+      allow delete: if true;
     }
 
     // Deny anything outside the known collections/documents above.

@@ -4,17 +4,20 @@ import { LoginModal } from './components/LoginModal';
 import { ExcelTableTab } from './components/ExcelTableTab';
 import { FieldsConfigTab } from './components/FieldsConfigTab';
 import { AnalyticsTab } from './components/AnalyticsTab';
+import { UsersManagementTab } from './components/UsersManagementTab';
 import { NewCaseModal } from './components/NewCaseModal';
 import { CaseModal } from './components/CaseModal';
 import { Toast } from './components/Toast';
 import { DEFAULT_FIELDS, DEFAULT_FIELD_AREAS } from './data/initialData';
-import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig, FieldArea } from './types';
+import { SUPER_ADMIN_EMAIL } from './data/roles';
+import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig, FieldArea, AppUser } from './types';
 import {
   subscribeToCases,
   subscribeToCustomFields,
   subscribeToAppSettings,
   subscribeToHierarchyPresets,
   subscribeToFieldAreas,
+  subscribeToAppUsers,
   saveCaseToFirestore,
   deleteCaseFromFirestore,
   deleteMultipleCasesFromFirestore,
@@ -23,7 +26,8 @@ import {
   deleteCustomFieldFromFirestore,
   saveAppSettingsToFirestore,
   saveHierarchyPresetsToFirestore,
-  saveFieldAreasToFirestore
+  saveFieldAreasToFirestore,
+  saveAppUserToFirestore
 } from './lib/firebase';
 
 interface UserProfile {
@@ -58,8 +62,17 @@ export default function App() {
 
   const [showLoginModal, setShowLoginModal] = useState<boolean>(() => !currentUserEmail);
 
-  // Admin permissions check
-  const isAdmin = currentUserEmail?.trim().toLowerCase() === 'ricardo.s167@gmail.com';
+  // Super Admin permissions check (the single hardcoded account) — controls
+  // access to Configurar Campos and other super-admin-only settings.
+  const isSuperAdmin = currentUserEmail?.trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+
+  // Managed user accounts (admin & agent roles) — see types.ts AppUser
+  const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const currentAppUserRecord = appUsers.find((u) => u.email === currentUserEmail?.trim().toLowerCase());
+  // Both the Super Admin and any account with role 'admin' can manage agent
+  // accounts. Computed live from appUsers (not stored at login time) so a
+  // role change takes effect immediately without requiring re-login.
+  const canManageUsers = isSuperAdmin || currentAppUserRecord?.role === 'admin';
 
   // Dynamic Custom Fields State
   const [customFields, setCustomFields] = useState<CustomField[]>(DEFAULT_FIELDS);
@@ -82,15 +95,18 @@ export default function App() {
   // Passive success notification (e.g. "Caso creado con éxito")
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Active Tab: 'table' | 'fields' | 'analytics'
-  const [activeTab, setActiveTab] = useState<'table' | 'fields' | 'analytics'>('table');
+  // Active Tab: 'table' | 'fields' | 'analytics' | 'users'
+  const [activeTab, setActiveTab] = useState<'table' | 'fields' | 'analytics' | 'users'>('table');
 
-  // Security guard for admin-only tab
+  // Security guards for restricted tabs
   useEffect(() => {
-    if (activeTab === 'fields' && !isAdmin) {
+    if (activeTab === 'fields' && !isSuperAdmin) {
       setActiveTab('table');
     }
-  }, [activeTab, isAdmin]);
+    if (activeTab === 'users' && !canManageUsers) {
+      setActiveTab('table');
+    }
+  }, [activeTab, isSuperAdmin, canManageUsers]);
 
   // Search Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -165,12 +181,17 @@ export default function App() {
       }
     });
 
+    const unsubscribeAppUsers = subscribeToAppUsers((fetchedUsers) => {
+      setAppUsers(fetchedUsers);
+    });
+
     return () => {
       unsubscribeCases();
       unsubscribeFields();
       unsubscribeSettings();
       unsubscribeHierarchy();
       unsubscribeFieldAreas();
+      unsubscribeAppUsers();
     };
   }, []);
 
@@ -182,13 +203,13 @@ export default function App() {
     }
   }, [currentUserEmail]);
 
-  // Sync selected case modal when real-time updates happen
+  // Sync selected case modal when real-time updates happen. If the case was
+  // deleted (by this user or another one, individually or in bulk) while the
+  // modal was open, close it instead of leaving it showing stale/ghost data.
   useEffect(() => {
     if (selectedCaseForModal) {
       const updated = cases.find((c) => c.id === selectedCaseForModal.id);
-      if (updated) {
-        setSelectedCaseForModal(updated);
-      }
+      setSelectedCaseForModal(updated || null);
     }
   }, [cases]);
 
@@ -226,7 +247,7 @@ export default function App() {
       }
     }
     setToastMessage(`Caso ${newCase.id} creado con éxito`);
-    await saveCaseToFirestore(newCase);
+    await saveCaseToFirestore(newCase, { merge: false });
   };
 
   const handleUpdateCase = async (updatedCase: CaseRecord) => {
@@ -294,6 +315,10 @@ export default function App() {
     await saveFieldAreasToFirestore(newAreas);
   };
 
+  const handleSaveAppUser = async (user: AppUser) => {
+    await saveAppUserToFirestore(user);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased selection:bg-slate-200">
       
@@ -302,6 +327,7 @@ export default function App() {
         <LoginModal
           onLogin={handleLogin}
           currentEmail={currentUserEmail || undefined}
+          appUsers={appUsers}
         />
       )}
 
@@ -317,6 +343,7 @@ export default function App() {
         totalCasesCount={cases.length}
         appSettings={appSettings}
         onSaveAppSettings={handleSaveAppSettings}
+        canManageUsers={canManageUsers}
       />
 
       {/* Main Container */}
@@ -338,7 +365,7 @@ export default function App() {
         )}
 
         {/* TAB 2: CUSTOM FIELDS CONFIGURATION */}
-        {activeTab === 'fields' && isAdmin && (
+        {activeTab === 'fields' && isSuperAdmin && (
           <FieldsConfigTab
             customFields={customFields}
             onAddField={handleAddField}
@@ -357,6 +384,16 @@ export default function App() {
           <AnalyticsTab
             cases={cases}
             customFields={customFields}
+          />
+        )}
+
+        {/* TAB 5: USER ACCOUNTS MANAGEMENT (admin & super admin) */}
+        {activeTab === 'users' && canManageUsers && (
+          <UsersManagementTab
+            appUsers={appUsers}
+            currentUserEmail={currentUserEmail || ''}
+            isSuperAdmin={isSuperAdmin}
+            onSaveAppUser={handleSaveAppUser}
           />
         )}
 

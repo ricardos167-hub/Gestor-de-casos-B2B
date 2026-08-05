@@ -68,6 +68,20 @@ export interface AppSettings {
   appSubtitle: string;
 }
 
+// 'admin' accounts are created only by the Super Admin and can manage 'agent'
+// accounts (create individually, bulk-upload via Excel, reset password).
+// 'agent' accounts are the regular managed user accounts created by an admin.
+// The Super Admin itself is never stored here — see SUPER_ADMIN_EMAIL.
+export type AppUserRole = 'admin' | 'agent';
+
+export interface AppUser {
+  email: string; // lowercase, trimmed — also the Firestore document id
+  passwordHash: string; // SHA-256 hex digest (see utils/hash.ts — client-side only, not real security)
+  role: AppUserRole;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface HierarchyNode {
   id: string;
   name: string;

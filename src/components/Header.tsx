@@ -1,24 +1,25 @@
 import React, { useState } from 'react';
-import { 
-  Table, 
-  BarChart3, 
-  Plus, 
-  User, 
-  LogOut, 
-  Search, 
+import {
+  Table,
+  BarChart3,
+  Plus,
+  User,
+  LogOut,
+  Search,
   Ticket,
   SlidersHorizontal,
   Edit3,
   Check,
   X,
-  Shield
+  Shield,
+  Users
 } from 'lucide-react';
 import { AppSettings } from '../types';
 
 interface HeaderProps {
   currentUserEmail: string;
-  activeTab: 'table' | 'fields' | 'analytics';
-  setActiveTab: (tab: 'table' | 'fields' | 'analytics') => void;
+  activeTab: 'table' | 'fields' | 'analytics' | 'users';
+  setActiveTab: (tab: 'table' | 'fields' | 'analytics' | 'users') => void;
   onOpenNewCaseModal: () => void;
   onChangeUser: () => void;
   searchQuery: string;
@@ -26,6 +27,7 @@ interface HeaderProps {
   totalCasesCount: number;
   appSettings: AppSettings;
   onSaveAppSettings: (settings: AppSettings) => void;
+  canManageUsers: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   totalCasesCount,
   appSettings,
   onSaveAppSettings,
+  canManageUsers,
 }) => {
   const isAdmin = currentUserEmail?.trim().toLowerCase() === 'ricardo.s167@gmail.com';
   const [isEditingTitleModalOpen, setIsEditingTitleModalOpen] = useState(false);
@@ -189,6 +192,20 @@ export const Header: React.FC<HeaderProps> = ({
               <BarChart3 className="w-3.5 h-3.5" />
               <span>Métricas</span>
             </button>
+
+            {canManageUsers && (
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'users'
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Gestionar Usuarios</span>
+              </button>
+            )}
           </nav>
 
           <div className="hidden lg:flex items-center gap-2 text-[11px] text-slate-400">

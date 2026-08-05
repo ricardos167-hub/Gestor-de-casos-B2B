@@ -106,10 +106,14 @@ export const ExcelTableTab: React.FC<ExcelTableTabProps> = ({
 
     const fieldsCopy = [...customFields];
     const sourceIdx = fieldsCopy.findIndex((f) => f.id === sourceColId);
-    const targetIdx = fieldsCopy.findIndex((f) => f.id === targetColId);
+    let targetIdx = fieldsCopy.findIndex((f) => f.id === targetColId);
 
     if (sourceIdx !== -1 && targetIdx !== -1) {
       const [moved] = fieldsCopy.splice(sourceIdx, 1);
+      // Dropping always places the column immediately before the target,
+      // regardless of drag direction (removing the source first shifts every
+      // later index left by one, so the target index needs the same shift).
+      if (sourceIdx < targetIdx) targetIdx -= 1;
       fieldsCopy.splice(targetIdx, 0, moved);
 
       const reordered = fieldsCopy.map((f, idx) => ({

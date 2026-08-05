@@ -7,13 +7,14 @@ import {
   onSnapshot,
   setDoc,
   deleteDoc,
+  deleteField,
   writeBatch,
   runTransaction,
   persistentLocalCache,
   persistentMultipleTabManager
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig, FieldArea } from '../types';
+import { CaseRecord, CustomField, AppSettings, HierarchyPresetConfig, FieldArea, AppUser } from '../types';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
@@ -90,10 +91,25 @@ export async function getNextCaseId(): Promise<string> {
   return `RS${String(nextNumber).padStart(6, '0')}`;
 }
 
-// Save or Update Case
-export async function saveCaseToFirestore(caseRecord: CaseRecord) {
+// Replaces top-level `undefined` values with deleteField() so a merge write
+// actually clears a field in Firestore instead of silently leaving the old
+// value in place (setDoc with merge:true never removes keys absent from the
+// payload, and ignoreUndefinedProperties makes `undefined` keys absent).
+function withDeletedFieldsForUndefined<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  Object.keys(obj).forEach((key) => {
+    result[key] = obj[key] === undefined ? deleteField() : obj[key];
+  });
+  return result;
+}
+
+// Save or Update Case. Pass { merge: false } when creating a brand-new case
+// so a colliding/reused id overwrites cleanly instead of merging with
+// whatever (unexpected) document already exists under that id.
+export async function saveCaseToFirestore(caseRecord: CaseRecord, options?: { merge?: boolean }) {
   const docRef = doc(db, 'cases', caseRecord.id);
-  await setDoc(docRef, caseRecord, { merge: true });
+  const merge = options?.merge ?? true;
+  await setDoc(docRef, withDeletedFieldsForUndefined(caseRecord), merge ? { merge: true } : {});
 }
 
 // Delete Case
@@ -115,7 +131,7 @@ export async function deleteMultipleCasesFromFirestore(caseIds: string[]) {
 // Save or Update Custom Field
 export async function saveCustomFieldToFirestore(field: CustomField) {
   const docRef = doc(db, 'customFields', field.id);
-  await setDoc(docRef, field, { merge: true });
+  await setDoc(docRef, withDeletedFieldsForUndefined(field), { merge: true });
 }
 
 // Save All Custom Fields (e.g. reorder or batch init)
@@ -212,4 +228,25 @@ export function subscribeToHierarchyPresets(callback: (configs: HierarchyPresetC
 export async function saveHierarchyPresetsToFirestore(configs: HierarchyPresetConfig[]) {
   const docRef = doc(db, 'appSettings', 'hierarchyPresets');
   await setDoc(docRef, { items: configs });
+}
+
+// Managed user accounts (admin-created 'agent' accounts, and Super-Admin-created
+// 'admin' accounts). Doc id is the lowercase email, so create-or-reset-password
+// is always the same upsert call.
+export function subscribeToAppUsers(callback: (users: AppUser[]) => void) {
+  const usersRef = collection(db, 'appUsers');
+  return onSnapshot(usersRef, (snapshot) => {
+    const usersList: AppUser[] = [];
+    snapshot.forEach((docSnap) => {
+      usersList.push(docSnap.data() as AppUser);
+    });
+    callback(usersList);
+  }, (error) => {
+    console.error('Error listening to appUsers:', error);
+  });
+}
+
+export async function saveAppUserToFirestore(user: AppUser) {
+  const docRef = doc(db, 'appUsers', user.email);
+  await setDoc(docRef, withDeletedFieldsForUndefined(user), { merge: true });
 }

@@ -235,7 +235,19 @@ export const CaseModal: React.FC<CaseModalProps> = ({
           <div className="flex items-center gap-2">
             {!isEditing ? (
               <button
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  // Reseed the editable form state from the latest caseRecord:
+                  // if this modal has been open a while, real-time updates from
+                  // other users may have moved past what these fields held when
+                  // the modal first mounted, and saving would otherwise revert
+                  // their changes.
+                  setTitulo(caseRecord.titulo ?? '');
+                  setEstado(caseRecord.estado ?? '');
+                  setPrioridad(caseRecord.prioridad ?? '');
+                  setCustomValues({ ...caseRecord.customValues });
+                  setHierarchySelections({});
+                  setIsEditing(true);
+                }}
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-700"
               >
                 <Edit3 className="w-3.5 h-3.5" />
@@ -412,6 +424,19 @@ export const CaseModal: React.FC<CaseModalProps> = ({
 
                 type Row = { kind: 'field'; field: CustomField } | { kind: 'hierarchy'; config: HierarchyPresetConfig };
 
+                const getInitialHierarchyPath = (config: HierarchyPresetConfig): string[] => {
+                  const path: string[] = [];
+                  for (const lvlName of config.levels) {
+                    const matchedField = customFields.find(
+                      (f) => f.label.toLowerCase().trim() === lvlName.toLowerCase().trim()
+                    );
+                    const val = matchedField ? customValues[matchedField.id] : undefined;
+                    if (typeof val !== 'string' || val.trim() === '') break;
+                    path.push(val);
+                  }
+                  return path;
+                };
+
                 const renderHierarchyRow = (config: HierarchyPresetConfig) => {
                   const blocksClose = isClosing && config.requiredToClose && !isHierarchyComplete(config);
 
@@ -424,8 +449,15 @@ export const CaseModal: React.FC<CaseModalProps> = ({
                         <HierarchyButtonSelector
                           config={config}
                           variant="clean"
+                          initialPath={getInitialHierarchyPath(config)}
                           onSelectFinalPreset={(selectedPath, titleSuggestion) => {
-                            setTitulo(titleSuggestion);
+                            // Only fill the title if the user hasn't already set
+                            // one — matches NewCaseModal's behavior, and avoids
+                            // clobbering a manually written title when editing
+                            // an existing case just to fix a hierarchy level.
+                            if (!titulo.trim()) {
+                              setTitulo(titleSuggestion);
+                            }
                             setHierarchySelections((prev) => ({ ...prev, [config.id]: selectedPath }));
                             if (closeError) setCloseError(null);
                             if (config.levels && config.levels.length > 0) {

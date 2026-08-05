@@ -7,6 +7,11 @@ interface HierarchyButtonSelectorProps {
   onSelectFinalPreset: (selectedPath: string[], titleSuggestion: string) => void;
   compact?: boolean;
   variant?: 'clean' | 'card';
+  // Previously saved path (level names, matching what onSelectFinalPreset
+  // reports back) to preselect when editing a case that already has this
+  // hierarchy filled in — otherwise the dropdowns look empty even though the
+  // underlying custom fields already hold values.
+  initialPath?: string[];
 }
 
 export const HierarchyButtonSelector: React.FC<HierarchyButtonSelectorProps> = ({
@@ -14,9 +19,22 @@ export const HierarchyButtonSelector: React.FC<HierarchyButtonSelectorProps> = (
   onSelectFinalPreset,
   compact = false,
   variant = 'clean',
+  initialPath,
 }) => {
   // Store selected node at each level index: selectedPath[levelIdx] = node
-  const [selectedPathNodes, setSelectedPathNodes] = useState<HierarchyNode[]>([]);
+  const [selectedPathNodes, setSelectedPathNodes] = useState<HierarchyNode[]>(() => {
+    if (!initialPath || initialPath.length === 0 || !config.tree) return [];
+    const nodes: HierarchyNode[] = [];
+    let levelOptions: HierarchyNode[] | undefined = config.tree;
+    for (const name of initialPath) {
+      if (!levelOptions) break;
+      const match = levelOptions.find((n) => n.name === name);
+      if (!match) break;
+      nodes.push(match);
+      levelOptions = match.children;
+    }
+    return nodes;
+  });
   // View mode state for card variant
   const [viewMode, setViewMode] = useState<'select' | 'buttons'>('select');
 

@@ -369,7 +369,12 @@ export const FieldsConfigTab: React.FC<FieldsConfigTabProps> = ({
     if (draggedIdx === null || draggedIdx === targetIdx) return;
     const rows = [...combinedRows];
     const [moved] = rows.splice(draggedIdx, 1);
-    rows.splice(targetIdx, 0, moved);
+    // Dropping always places the row immediately before the target,
+    // regardless of drag direction (removing the source first shifts every
+    // later index left by one, so the target index needs the same shift).
+    let insertIdx = targetIdx;
+    if (draggedIdx < targetIdx) insertIdx -= 1;
+    rows.splice(insertIdx, 0, moved);
     applyRowOrder(rows);
     setDraggedIdx(null);
     setDragOverIdx(null);

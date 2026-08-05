@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mail, LogIn, Shield, Lock, Tag } from 'lucide-react';
+import { AppUser } from '../types';
+import { SUPER_ADMIN_EMAIL } from '../data/roles';
+import { sha256Hex } from '../utils/hash';
 
 export interface UserProfile {
   origen: string;
@@ -9,6 +12,7 @@ export interface UserProfile {
 interface LoginModalProps {
   onLogin: (email: string, profile: UserProfile) => void;
   currentEmail?: string;
+  appUsers: AppUser[];
 }
 
 const ORIGEN_OPTIONS = ['Call', 'Whatsapp', 'Otros'];
@@ -32,16 +36,9 @@ function storeProfile(email: string, profile: UserProfile) {
 // attacker (client-side checks can always be bypassed / brute-forced against
 // the hash in devtools) — real access control must live in Firestore rules
 // tied to a Firebase Auth identity.
-const SUPER_ADMIN_EMAIL = 'ricardo.s167@gmail.com';
 const SUPER_ADMIN_PASSWORD_HASH = '19b67056b896b5320ba3201c4745f8c87439da78314435e49842f7cf2e653b76';
 
-async function sha256Hex(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail }) => {
+export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail, appUsers }) => {
   const [emailInput, setEmailInput] = useState(currentEmail || '');
   const [passwordInput, setPasswordInput] = useState('');
   const [origenInput, setOrigenInput] = useState('');
@@ -53,16 +50,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail })
 
   const cleanEmailLower = emailInput.trim().toLowerCase();
   const isValidEmailFormat = cleanEmailLower.includes('@') && cleanEmailLower.includes('.');
+
+  // Every account must be provisioned by an Admin or the Super Admin first —
+  // there is no more free/guest entry for unregistered emails.
+  const matchedAppUser = isValidEmailFormat ? appUsers.find((u) => u.email === cleanEmailLower) : undefined;
+  const requiresPassword = isSuperAdminEmail || Boolean(matchedAppUser);
+  const isRegisteredAccount = isSuperAdminEmail || Boolean(matchedAppUser);
+
   const existingProfile = isValidEmailFormat ? getStoredProfile(cleanEmailLower) : null;
-  const needsProfileSelection = isValidEmailFormat && !existingProfile;
+  // Only prompt for Origen/Programa once we know the account is real — no
+  // point asking someone to fill this in just to reject them a step later.
+  const needsProfileSelection = isValidEmailFormat && isRegisteredAccount && !existingProfile;
 
   useEffect(() => {
-    if (isSuperAdminEmail) {
+    if (requiresPassword) {
       setTimeout(() => {
         passwordInputRef.current?.focus();
       }, 100);
     }
-  }, [isSuperAdminEmail]);
+  }, [requiresPassword]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +99,27 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail })
         }, 50);
         return;
       }
+    } else if (matchedAppUser) {
+      if (!passwordInput.trim()) {
+        setError('🔒 Esta cuenta requiere contraseña. Por favor ingrésala.');
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 50);
+        return;
+      }
+      const enteredHash = await sha256Hex(passwordInput.trim());
+      if (enteredHash !== matchedAppUser.passwordHash) {
+        setError('Contraseña incorrecta.');
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 50);
+        return;
+      }
+    } else {
+      // No free/guest entry anymore — every account must be provisioned by
+      // an Admin or the Super Admin first (individually or via Excel).
+      setError('Este correo no tiene una cuenta registrada. Pide a un administrador que te cree una cuenta.');
+      return;
     }
 
     const storedProfile = getStoredProfile(cleanEmail);
@@ -146,14 +173,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail })
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-slate-900 text-xs transition-all"
                 />
               </div>
+              {isValidEmailFormat && !isRegisteredAccount && (
+                <p className="text-amber-700 text-[11px] mt-1.5 font-medium">
+                  No encontramos una cuenta con este correo. Pide a un administrador que te cree una.
+                </p>
+              )}
             </div>
 
-            {/* Password input for Super Admin */}
-            {isSuperAdminEmail && (
+            {/* Password input for Super Admin and other managed accounts (admin/agent) */}
+            {requiresPassword && (
               <div className="animate-in fade-in duration-200">
                 <label htmlFor="password" className="block text-[11px] font-semibold uppercase tracking-wider text-amber-700 mb-1.5 flex items-center gap-1">
                   <Lock className="w-3.5 h-3.5" />
-                  Contraseña Super Admin
+                  {isSuperAdminEmail ? 'Contraseña Super Admin' : 'Contraseña'}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-amber-500">
@@ -173,7 +205,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, currentEmail })
                   />
                 </div>
                 <p className="text-amber-700 text-[11px] mt-1 font-medium">
-                  Se requiere contraseña para iniciar sesión como Super Admin.
+                  {isSuperAdminEmail
+                    ? 'Se requiere contraseña para iniciar sesión como Super Admin.'
+                    : 'Esta es una cuenta gestionada — se requiere contraseña para iniciar sesión.'}
                 </p>
               </div>
             )}
