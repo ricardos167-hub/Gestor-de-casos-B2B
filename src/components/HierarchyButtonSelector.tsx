@@ -91,7 +91,7 @@ export const HierarchyButtonSelector: React.FC<HierarchyButtonSelectorProps> = (
                 className={`w-full px-3 py-2 rounded-lg text-xs font-medium border outline-none transition-all ${
                   isDisabled
                     ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
-                    : 'bg-white text-slate-800 border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 cursor-pointer shadow-2xs'
+                    : `text-slate-800 border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 cursor-pointer shadow-2xs ${selectedVal ? 'bg-white' : 'bg-rose-50'}`
                 }`}
               >
                 <option value="">
